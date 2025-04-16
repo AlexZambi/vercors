@@ -230,18 +230,34 @@ case class TypeQualifierCoercion[Pre <: Generation]()
       case PostAssignExpression(target, _)
           if target.t.isInstanceOf[TConst[Pre]] =>
         throw DisallowedConstAssignment(target)
-      case npa @ NewPointerArray(t, size, _) =>
+      case npa @ NewPointerArray(t, size, _, elementSize) =>
         val (info, newT) = getUnqualified(t)
         if (info.const)
-          NewConstPointerArray(newT, dispatch(size))(npa.blame)
+          NewConstPointerArray(newT, dispatch(size), dispatch(elementSize))(
+            npa.blame
+          )
         else
-          NewPointerArray(newT, dispatch(size), info.unique)(npa.blame)
-      case npa @ NewNonNullPointerArray(t, size, _) =>
+          NewPointerArray(
+            newT,
+            dispatch(size),
+            info.unique,
+            dispatch(elementSize),
+          )(npa.blame)
+      case npa @ NewNonNullPointerArray(t, size, _, elementSize) =>
         val (info, newT) = getUnqualified(t)
         if (info.const)
-          NewNonNullConstPointerArray(newT, dispatch(size))(npa.blame)
+          NewNonNullConstPointerArray(
+            newT,
+            dispatch(size),
+            dispatch(elementSize),
+          )(npa.blame)
         else
-          NewNonNullPointerArray(newT, dispatch(size), info.unique)(npa.blame)
+          NewNonNullPointerArray(
+            newT,
+            dispatch(size),
+            info.unique,
+            dispatch(elementSize),
+          )(npa.blame)
       case newO @ NewObjectUnique(cls, _) =>
         val map = TypeQualifierCoercion
           .getUniqueMap(newO.t.asInstanceOf[TClassUnique[Pre]])
@@ -269,9 +285,11 @@ case class TypeQualifierCoercion[Pre <: Generation]()
         val v = new Variable[Post](TNonNullConstPointer(t))
         val l = Local[Post](v.ref)
         val newP =
-          NewNonNullConstPointerArray(dispatch(ref.decl.t), const(1))(
-            PanicBlame("Size >0")
-          )(a.o)
+          NewNonNullConstPointerArray(
+            dispatch(ref.decl.t),
+            const(1),
+            const(1), // Does not matter for consts
+          )(PanicBlame("Size >0"))(a.o)
         ScopedExpr(
           Seq(v),
           With[Post](
@@ -790,7 +808,8 @@ case class MakeUniqueMethodCopies[Pre <: Generation]() extends Rewriter[Pre] {
         else { d.rewriteDefault() }
       case e @ DerefPointer(p) =>
         e.rewrite(pointer = rewriteAnyPointerReturn(p))
-      case e @ FreePointer(p) => e.rewrite(pointer = rewriteAnyPointerReturn(p))
+      case e @ FreePointer(p, _) =>
+        e.rewrite(pointer = rewriteAnyPointerReturn(p))
       case e @ PointerBlockLength(p) =>
         e.rewrite(pointer = rewriteAnyPointerReturn(p))
       case e @ PointerLength(p) =>

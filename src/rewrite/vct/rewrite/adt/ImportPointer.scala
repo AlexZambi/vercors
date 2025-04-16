@@ -5,6 +5,7 @@ import ImportADT.typeText
 import hre.util.ScopedStack
 import vct.col.origin._
 import vct.col.ref.Ref
+import vct.col.rewrite.adt.ImportPointer.AsTypeOrigin
 import vct.col.rewrite.{ClassToRef, Generation}
 import vct.col.util.AstBuildHelpers.{functionInvocation, _}
 import vct.col.util.SuccessionMap
@@ -86,6 +87,10 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
     "pointer",
   )
   private lazy val pointerOf = find[ADTFunction[Post]](pointerAdt, "pointer_of")
+  private lazy val pointerStride = find[ADTFunction[Post]](
+    pointerAdt,
+    "pointer_stride",
+  )
   private lazy val pointerBlock = find[ADTFunction[Post]](
     pointerAdt,
     "pointer_block",
@@ -125,19 +130,27 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
       adt: Ref[Post, AxiomaticDataType[Post]] = pointerAdt.ref,
       block: Ref[Post, ADTFunction[Post]] = pointerBlock.ref,
   ): Function[Post] = {
-    implicit val o: Origin = AsTypeOrigin.where(name = "as_" + typeName)
+    implicit val o: Origin = AsTypeOrigin
+//    val orig = new Variable[Post](TAxiomatic(adt, Nil))(o.where(name = "orig"))
+//    val inv: Function[Post] = globalDeclarations.declare(
+//      function[Post](
+//        AbstractApplicable,
+//        TrueSatisfiable,
+//        returnType = TAxiomatic(adt, Nil),
+//        args = Seq(orig),
+//      )(o.where(name = "as_" + typeName + "_inv"))
+//    )
     val value =
-      new Variable[Post](TAxiomatic(adt, Nil))(
-        AsTypeOrigin.where(name = "value")
-      )
+      new Variable[Post](TAxiomatic(adt, Nil))(o.where(name = "value"))
     globalDeclarations.declare(withResult((result: Result[Post]) =>
       function[Post](
         AbstractApplicable,
         TrueSatisfiable,
+//        ensures = UnitAccountedPredicate(functionInvocation[Post](TrueSatisfiable, inv.ref, args=Seq(result)) === value.get),
         ensures = UnitAccountedPredicate(result === value.get),
         returnType = TAxiomatic(adt, Nil),
         args = Seq(value),
-      )
+      )(o.where(name = "as_" + typeName))
     ))
   }
 
@@ -280,19 +293,17 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
               }.get)
               aDTDeclarations.collect {
                 adt.decls.foreach(dispatch)
-                aDTDeclarations.declare(new ADTAxiom[Post](foralls(
-                  Seq(TAxiomatic(adtSucc, Nil), TInt()),
-                  body = { case Seq(p, stride) =>
+                aDTDeclarations.declare(new ADTAxiom[Post](forall(
+                  TAxiomatic(adtSucc, Nil),
+                  body = { p =>
                     // TODO: Stop hardcoding this number!
                     LessEq(
-                      adtFunctionInvocation(addrSucc, args = Seq(p, stride)),
+                      adtFunctionInvocation(addrSucc, args = Seq(p)),
                       const(BigInt("18446744073709551615")),
                     )
                   },
-                  triggers = { case Seq(p, stride) =>
-                    Seq(Seq(
-                      adtFunctionInvocation(addrSucc, args = Seq(p, stride))
-                    ))
+                  triggers = { p =>
+                    Seq(Seq(adtFunctionInvocation(addrSucc, args = Seq(p))))
                   },
                 )))
               }._1
@@ -322,7 +333,11 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
             case ptr =>
               FunctionInvocation[Post](
                 ref = pointerAdd.ref,
-                args = Seq(ptr, const(0)),
+                args = Seq(
+                  ptr,
+                  const(0),
+                  adtFunctionInvocation(pointerStride.ref, None, Seq(ptr)),
+                ),
                 typeArgs = Nil,
                 Nil,
                 Nil,
@@ -386,21 +401,29 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
   ): Expr[Post] = {
     implicit val o: Origin = e.o
     e match {
-      case add @ PointerAdd(pointer, offset) =>
+      case add @ PointerAdd(pointer, offset, size) =>
         FunctionInvocation[Post](
           ref = pointerAdd.ref,
-          args = Seq(unwrapOption(pointer, add.blame), dispatch(offset)),
+          args = Seq(
+            unwrapOption(pointer, add.blame),
+            dispatch(offset),
+            dispatch(size),
+          ),
           typeArgs = Nil,
           Nil,
           Nil,
         )(NoContext(PointerBoundsPreconditionFailed(add.blame, pointer)))
-      case sub @ PointerSubscript(pointer, index) =>
+      case sub @ PointerSubscript(pointer, index, size) =>
         FunctionInvocation[Post](
           ref = pointerDeref.ref,
           args = Seq(
             FunctionInvocation[Post](
               ref = pointerAdd.ref,
-              args = Seq(unwrapOption(pointer, sub.blame), dispatch(index)),
+              args = Seq(
+                unwrapOption(pointer, sub.blame),
+                dispatch(index),
+                dispatch(size),
+              ),
               typeArgs = Nil,
               Nil,
               Nil,
@@ -456,7 +479,7 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
         e.rewrite(triggers =
           triggers.map(_.map(rewriteTopLevelPointerSubscriptInTrigger))
         )
-      case sub @ PointerSubscript(pointer, index) =>
+      case sub @ PointerSubscript(pointer, index, size) =>
         SilverDeref(
           obj =
             FunctionInvocation[Post](
@@ -464,7 +487,11 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
               args = Seq(
                 FunctionInvocation[Post](
                   ref = pointerAdd.ref,
-                  args = Seq(unwrapOption(pointer, sub.blame), dispatch(index)),
+                  args = Seq(
+                    unwrapOption(pointer, sub.blame),
+                    dispatch(index),
+                    dispatch(size),
+                  ),
                   typeArgs = Nil,
                   Nil,
                   Nil,
@@ -476,11 +503,15 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
             )(PanicBlame("ptr_deref requires nothing.")),
           field = getPointerField(pointer),
         )(PointerFieldInsufficientPermission(sub.blame, sub))
-      case add @ PointerAdd(pointer, offset) =>
+      case add @ PointerAdd(pointer, offset, size) =>
         val inv =
           FunctionInvocation[Post](
             ref = pointerAdd.ref,
-            args = Seq(unwrapOption(pointer, add.blame), dispatch(offset)),
+            args = Seq(
+              unwrapOption(pointer, add.blame),
+              dispatch(offset),
+              dispatch(size),
+            ),
             typeArgs = Nil,
             Nil,
             Nil,
@@ -503,7 +534,15 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
                   FunctionInvocation[Post](
                     ref = pointerAdd.ref,
                     // Always index with zero, otherwise quantifiers with pointers do not get triggered
-                    args = Seq(unwrapOption(pointer, deref.blame), const(0)),
+                    args = Seq(
+                      unwrapOption(pointer, deref.blame),
+                      const(0),
+                      adtFunctionInvocation(
+                        pointerStride.ref,
+                        None,
+                        Seq(unwrapOption(pointer, deref.blame)),
+                      ),
+                    ),
                     typeArgs = Nil,
                     Nil,
                     Nil,
@@ -532,6 +571,12 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
         ADTFunctionInvocation[Post](
           typeArgs = Some((pointerAdt.ref, Nil)),
           ref = pointerOffset.ref,
+          args = Seq(unwrapOption(pointer, off.blame)),
+        )
+      case off @ PointerStride(pointer) =>
+        ADTFunctionInvocation[Post](
+          typeArgs = Some((pointerAdt.ref, Nil)),
+          ref = pointerStride.ref,
           args = Seq(unwrapOption(pointer, off.blame)),
         )
       case pointerLen @ PointerLength(pointer) =>
@@ -619,7 +664,7 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
                       typeArgs = Nil,
                       Nil,
                       Nil,
-                    )(PanicBlame("Stride > 0"))
+                    )(TrueSatisfiable)
                   ),
                 )
               },
@@ -631,7 +676,7 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
               typeArgs = Nil,
               Nil,
               Nil,
-            )(PanicBlame("Stride > 0")) // TODO: Blame??
+            )(TrueSatisfiable)
         }
       case blck @ PointerBlock(p) =>
         ADTFunctionInvocation[Post](
@@ -666,7 +711,7 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
               },
             ).ref,
           args = Seq(p match {
-            case PointerAdd(_, _) => unwrapOption(p, to.blame)
+            case PointerAdd(_, _, _) => unwrapOption(p, to.blame)
             case _
                 if context.topOption.contains(InAxiom()) ||
                   p.o.find[LabelContext]
@@ -675,7 +720,15 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
             case _ =>
               FunctionInvocation[Post](
                 ref = pointerAdd.ref,
-                args = Seq(unwrapOption(p, to.blame), const(0)),
+                args = Seq(
+                  unwrapOption(p, to.blame),
+                  const(0),
+                  adtFunctionInvocation(
+                    pointerStride.ref,
+                    None,
+                    Seq(unwrapOption(p, to.blame)),
+                  ),
+                ),
                 typeArgs = Nil,
                 Nil,
                 Nil,
@@ -696,7 +749,7 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
     asType(
       innerType,
       preExpr match {
-        case PointerAdd(_, _) => postExpr
+        case PointerAdd(_, _, _) => postExpr
         // Don't add ptrAdd in an ADT axiom since we cannot use functions with preconditions there
         case _
             if context.topOption.contains(InAxiom()) ||
@@ -707,7 +760,11 @@ case class ImportPointer[Pre <: Generation](importer: ImportADTImporter)
           FunctionInvocation[Post](
             ref = pointerAdd.ref,
             // Always index with zero, otherwise quantifiers with pointers do not get triggered
-            args = Seq(postExpr, const(0)),
+            args = Seq(
+              postExpr,
+              const(0),
+              adtFunctionInvocation(pointerStride.ref, None, Seq(postExpr)),
+            ),
             typeArgs = Nil,
             Nil,
             Nil,

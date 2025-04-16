@@ -555,9 +555,9 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
                 )(c.o),
               )
           }
-        NewPointerArray(rw.dispatch(t2), size, None)(ArrayMallocFailed(inv))(
-          c.o
-        )
+        NewPointerArray(rw.dispatch(t2), size, None, sizeOf(t2, inv.o))(
+          ArrayMallocFailed(inv)
+        )(c.o)
       case CCast(CInvocation(CLocal("__vercors_malloc"), _, _, _), _) =>
         throw UnsupportedMalloc(c)
       case CCast(n @ Null(), t) if t.asPointer.isDefined => rw.dispatch(n)
@@ -816,6 +816,7 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
             cNameSuccessor(d).t.asPointer.get.element,
             Local(v.ref),
             None,
+            const(1), // TODO: What to do here?
           )(PanicBlame("Shared memory sizes cannot be negative.")),
         )
         declarations ++= Seq(cNameSuccessor(d))
@@ -830,6 +831,7 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
             cNameSuccessor(d).t.asPointer.get.element,
             c_const(size),
             None,
+            const(1), // TODO: What to do here?
           )(blame.get),
         )
         declarations ++= Seq(cNameSuccessor(d))
@@ -1321,15 +1323,21 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
           case (None, None) => throw WrongCType(decl)
           case (Some(size), None) =>
             val newArr =
-              NewNonNullPointerArray[Post](t, rw.dispatch(size), None)(
-                cta.blame
-              )
+              NewNonNullPointerArray[Post](
+                t,
+                rw.dispatch(size),
+                None,
+                sizeOf(oldT, o),
+              )(cta.blame)
             Block(Seq(LocalDecl(v), assignLocal(v.get, newArr)))
           case (None, Some(CLiteralArray(exprs))) =>
             val newArr =
-              NewNonNullPointerArray[Post](t, c_const[Post](exprs.size), None)(
-                cta.blame
-              )
+              NewNonNullPointerArray[Post](
+                t,
+                c_const[Post](exprs.size),
+                None,
+                sizeOf(oldT, o),
+              )(cta.blame)
             Block(
               Seq(LocalDecl(v), assignLocal(v.get, newArr)) ++
                 assignliteralArray(v, exprs, o)
@@ -1340,9 +1348,12 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
             if (realSize < exprs.size)
               logger.warn(s"Excess elements in array initializer: '${decl}'")
             val newArr =
-              NewNonNullPointerArray[Post](t, c_const[Post](realSize), None)(
-                cta.blame
-              )
+              NewNonNullPointerArray[Post](
+                t,
+                c_const[Post](realSize),
+                None,
+                sizeOf(oldT, o),
+              )(cta.blame)
             Block(
               Seq(LocalDecl(v), assignLocal(v.get, newArr)) ++
                 assignliteralArray(v, exprs.take(realSize.intValue), o)
@@ -1492,7 +1503,7 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
   def searchNames(e: Expr[Pre], original: Node[Pre]): Seq[CNameTarget[Pre]] =
     e match {
       case arr: CLocal[Pre] => Seq(arr.ref.get)
-      case PointerAdd(arr: CLocal[Pre], _) => Seq(arr.ref.get)
+      case PointerAdd(arr: CLocal[Pre], _, _) => Seq(arr.ref.get)
       case AmbiguousSubscript(arr: CLocal[Pre], _) => Seq(arr.ref.get)
       case AmbiguousPlus(l, r) if isPointer(l.t) && isNumeric(r.t) =>
         searchNames(l, original)
@@ -1507,7 +1518,8 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     loc match {
       case ArrayLocation(arr: CLocal[Pre], _) => Seq(arr.ref.get)
       case PointerLocation(arr: CLocal[Pre]) => Seq(arr.ref.get)
-      case PointerLocation(PointerAdd(arr: CLocal[Pre], _)) => Seq(arr.ref.get)
+      case PointerLocation(PointerAdd(arr: CLocal[Pre], _, _)) =>
+        Seq(arr.ref.get)
       case AmbiguousLocation(expr) => searchNames(expr, original)
       case _ => throw UnsupportedBarrierPermission(original)
     }
@@ -1518,8 +1530,8 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       case Perm(loc, _) => searchNames(loc, e)
       case PointsTo(loc, _, _) => searchNames(loc, e)
       case CurPerm(loc) => searchNames(loc, e)
-      case PermPointer(pointer, _, _) => searchNames(pointer, e)
-      case PermPointerIndex(pointer, _, _) => searchNames(pointer, e)
+      case PermPointer(pointer, _, _, _) => searchNames(pointer, e)
+      case PermPointerIndex(pointer, _, _, _) => searchNames(pointer, e)
       case _ => e.subnodes.flatMap(searchPermission)
     }
   }
@@ -1907,6 +1919,40 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     }
   }
 
+  def subscriptPointer(sub: AmbiguousSubscript[Pre]): Expr[Post] =
+    PointerSubscript(
+      rw.dispatch(sub.collection),
+      rw.dispatch(sub.index),
+      sizeOf(sub.collection.t.asPointer.get.element, sub.o),
+    )(sub.blame)(sub.o)
+
+  def addPointer(add: AmbiguousPlus[Pre]): Expr[Post] =
+    unfoldPointerAdd(
+      PointerAdd(
+        rw.dispatch(add.left),
+        rw.dispatch(add.right),
+        sizeOf(add.left.t.asPointer.get.element, add.o),
+      )(add.blame)(add.o)
+    )
+
+  def permPointer(pp: PermPointer[Pre]): Expr[Post] =
+    pp.rewrite(size = Some(sizeOf(pp.p.t.asPointer.get.element, pp.o)))
+
+  def permPointerIndex(pp: PermPointerIndex[Pre]): Expr[Post] =
+    pp.rewrite(size = Some(sizeOf(pp.p.t.asPointer.get.element, pp.o)))
+
+  private def unfoldPointerAdd[G](e: PointerAdd[G]): PointerAdd[G] =
+    e.pointer match {
+      case inner @ PointerAdd(_, _, _) =>
+        val PointerAdd(pointerInner, offsetInner, size) = unfoldPointerAdd(
+          inner
+        )
+        PointerAdd(pointerInner, Plus(offsetInner, e.offset)(e.o), size)(
+          e.blame
+        )(e.o)
+      case _ => e
+    }
+
   def invocation(inv: CInvocation[Pre]): Expr[Post] = {
     val CInvocation(applicable, args, givenMap, yields) = inv
 
@@ -2088,7 +2134,10 @@ case class LangCToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     (e.name, args, givenMap, yields) match {
       case (_, _, g, y) if g.nonEmpty || y.nonEmpty =>
       case ("__vercors_free", Seq(xs), _, _) if isPointer(xs.t) =>
-        return FreePointer[Post](rw.dispatch(xs))(inv.blame)(inv.o)
+        return FreePointer[Post](
+          rw.dispatch(xs),
+          sizeOf(xs.t.asPointer.get.element, inv.o),
+        )(inv.blame)(inv.o)
       case _ => ()
     }
 

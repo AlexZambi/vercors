@@ -421,7 +421,7 @@ case class AbstractState[G](
         }
       case Local(_) | DerefHeapVariable(_) | Deref(_, _) | DerefPointer(_) |
           AmbiguousSubscript(_, _) | SeqSubscript(_, _) | ArraySubscript(_, _) |
-          PointerSubscript(_, _) =>
+          PointerSubscript(_, _, _) =>
         variable_from_expr(expr) match {
           case Some(v) =>
             if (is_contract && !is_old)
@@ -569,7 +569,7 @@ case class AbstractState[G](
         }
       case Local(_) | DerefHeapVariable(_) | Deref(_, _) | DerefPointer(_) |
           AmbiguousSubscript(_, _) | SeqSubscript(_, _) | ArraySubscript(_, _) |
-          PointerSubscript(_, _) =>
+          PointerSubscript(_, _, _) =>
         variable_from_expr(expr) match {
           case Some(v) =>
             if (is_contract && !is_old)

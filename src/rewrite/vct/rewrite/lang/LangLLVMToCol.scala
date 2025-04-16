@@ -849,6 +849,9 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
           PointerSubscript[Post](
             DerefPointer(pointer)(pointer.o),
             IntegerValue(BigInt(0)),
+            const(
+              1
+            ), // TODO: Add proper size once we start caring about addresses in LLVM
           )(pointer.o),
           elementType,
           untilType,
@@ -858,7 +861,13 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       }
       case LLVMTArray(numElements, elementType) => {
         derefUntil(
-          PointerSubscript[Post](pointer, IntegerValue(BigInt(0)))(pointer.o),
+          PointerSubscript[Post](
+            pointer,
+            IntegerValue(BigInt(0)),
+            const(
+              1
+            ), // TODO: Add proper size once we start caring about addresses in LLVM
+          )(pointer.o),
           elementType,
           untilType,
         ).map { case (expr, inner) =>
@@ -870,6 +879,9 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
           PointerSubscript[Post](
             DerefPointer(pointer)(pointer.o),
             IntegerValue(BigInt(0)),
+            const(
+              1
+            ), // TODO: Add proper size once we start caring about addresses in LLVM
           )(pointer.o),
           elementType,
           untilType,
@@ -879,7 +891,13 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
       }
       case LLVMTVector(numElements, elementType) => {
         derefUntil(
-          PointerSubscript[Post](pointer, IntegerValue(BigInt(0)))(pointer.o),
+          PointerSubscript[Post](
+            pointer,
+            IntegerValue(BigInt(0)),
+            const(
+              1
+            ), // TODO: Add proper size once we start caring about addresses in LLVM
+          )(pointer.o),
           elementType,
           untilType,
         ).map { case (expr, inner) =>
@@ -943,6 +961,9 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
         PointerAdd[Post](
           rw.dispatch(gep.pointer),
           rw.dispatch(gep.indices.head),
+          const(
+            1
+          ), // TODO: Add proper size once we start caring about addresses in LLVM
         )(InvalidGEP)
       case struct: LLVMTStruct[Pre] => {
         // TODO: We don't support variables in GEP yet and this just assumes all the indices are integer constants
@@ -955,6 +976,9 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
                 PointerAdd(
                   rw.dispatch(gep.pointer),
                   rw.dispatch(gep.indices.head),
+                  const(
+                    1
+                  ), // TODO: Add proper size once we start caring about addresses in LLVM
                 )(InvalidGEP)
               )(InvalidGEP)
             AddrOf(rewritePointerChain(structPointer, struct, gep.indices.tail))
@@ -964,6 +988,9 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
                 PointerAdd(
                   rw.dispatch(gep.pointer),
                   rw.dispatch(gep.indices.head),
+                  const(
+                    1
+                  ), // TODO: Add proper size once we start caring about addresses in LLVM
                 )(InvalidGEP)
               )(InvalidGEP)
             AddrOf(rewritePointerChain(structPointer, struct, gep.indices.tail))
@@ -978,7 +1005,13 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
             )
             val structPointer =
               DerefPointer(
-                PointerAdd(pointer, rw.dispatch(gep.indices.head))(InvalidGEP)
+                PointerAdd(
+                  pointer,
+                  rw.dispatch(gep.indices.head),
+                  const(
+                    1
+                  ), // TODO: Add proper size once we start caring about addresses in LLVM
+                )(InvalidGEP)
               )(InvalidGEP)
             val ret = AddrOf(
               rewritePointerChain(structPointer, struct, gep.indices.tail)
@@ -1285,9 +1318,14 @@ case class LangLLVMToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
     val elements = rw.dispatch(alloc.numElements)
     assignLocal(
       v,
-      NewNonNullPointerArray[Post](newT, elements, None)(PanicBlame(
-        "allocation should never fail"
-      )),
+      NewNonNullPointerArray[Post](
+        newT,
+        elements,
+        None,
+        const(
+          1
+        ), // TODO: Add proper size once we start caring about addresses in LLVM
+      )(PanicBlame("allocation should never fail")),
     )
   }
 

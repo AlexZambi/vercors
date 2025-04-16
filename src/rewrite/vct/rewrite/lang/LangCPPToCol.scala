@@ -978,7 +978,8 @@ case class LangCPPToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
             declared = true
           case None =>
             cppGlobalNameSuccessor(RefCPPGlobalDeclaration(decl, idx)) = rw
-              .globalDeclarations.declare(new HeapVariable(t, init.init.map(rw.dispatch))(namedO))
+              .globalDeclarations
+              .declare(new HeapVariable(t, init.init.map(rw.dispatch))(namedO))
         }
       }
     }
@@ -2741,13 +2742,25 @@ case class LangCPPToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
           case (None, None) => throw WrongCPPType(decl)
           case (Some(size), None) =>
             val newArr =
-              NewNonNullPointerArray[Post](t, rw.dispatch(size), None)(cta.blame)
+              NewNonNullPointerArray[Post](
+                t,
+                rw.dispatch(size),
+                None,
+                const(
+                  1
+                ), // TODO: Add proper size once we start caring about addresses in CPP
+              )(cta.blame)
             Block(Seq(LocalDecl(v), assignLocal(v.get, newArr)))
           case (None, Some(CPPLiteralArray(exprs))) =>
             val newArr =
-              NewNonNullPointerArray[Post](t, c_const[Post](exprs.size), None)(
-                cta.blame
-              )
+              NewNonNullPointerArray[Post](
+                t,
+                c_const[Post](exprs.size),
+                None,
+                const(
+                  1
+                ), // TODO: Add proper size once we start caring about addresses in CPP
+              )(cta.blame)
             Block(
               Seq(LocalDecl(v), assignLocal(v.get, newArr)) ++
                 assignliteralArray(v, exprs, o)
@@ -2758,9 +2771,14 @@ case class LangCPPToCol[Pre <: Generation](rw: LangSpecificToCol[Pre])
             if (realSize < exprs.size)
               logger.warn(s"Excess elements in array initializer: '${decl}'")
             val newArr =
-              NewNonNullPointerArray[Post](t, c_const[Post](realSize), None)(
-                cta.blame
-              )
+              NewNonNullPointerArray[Post](
+                t,
+                c_const[Post](realSize),
+                None,
+                const(
+                  1
+                ), // TODO: Add proper size once we start caring about addresses in CPP
+              )(cta.blame)
             Block(
               Seq(LocalDecl(v), assignLocal(v.get, newArr)) ++
                 assignliteralArray(v, exprs.take(realSize.intValue), o)

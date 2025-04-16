@@ -201,7 +201,7 @@ case class IndexedVariable[G](field: InstanceField[G], i: Int)
       case ArraySubscript(arr, index) =>
         field_equals(arr, field) && i == state.resolve_integer_expression(index)
           .try_to_resolve().getOrElse(-1)
-      case PointerSubscript(pointer, index) =>
+      case PointerSubscript(pointer, index, _) =>
         field_equals(pointer, field) &&
         i == state.resolve_integer_expression(index).try_to_resolve()
           .getOrElse(-1)
@@ -250,6 +250,7 @@ case class IndexedVariable[G](field: InstanceField[G], i: Int)
             field.o
           ),
           IntegerValue(i)(field.o),
+          IntegerValue(1)(field.o), // TODO: Does this matter?
         )(field.o)(field.o)
     }
 

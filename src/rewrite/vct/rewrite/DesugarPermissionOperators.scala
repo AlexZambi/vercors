@@ -140,7 +140,7 @@ case class DesugarPermissionOperators[Pre <: Generation]()
                     (row0 === row1)),
             ),
         )
-      case PermPointer(p, len, perm) =>
+      case PermPointer(p, len, perm, size) =>
         (dispatch(p) !== Null()) &* const(0) <= PointerBlockOffset(dispatch(p))(
           FramedPtrBlockOffset
         ) + dispatch(len) &*
@@ -151,13 +151,13 @@ case class DesugarPermissionOperators[Pre <: Generation]()
             TInt(),
             i =>
               (const(0) <= i && i < dispatch(len)) ==> Perm(
-                PointerLocation(PointerAdd(dispatch(p), i)(FramedPtrOffset))(
+                PointerLocation(PointerAdd(dispatch(p), i, dispatch(size.get))(
                   FramedPtrOffset
-                ),
+                ))(FramedPtrOffset),
                 dispatch(perm),
               ),
           )
-      case PermPointerIndex(p, idx, perm) =>
+      case PermPointerIndex(p, idx, perm, size) =>
         (dispatch(p) !== Null()) &* const(0) <= PointerBlockOffset(dispatch(p))(
           FramedPtrBlockOffset
         ) + dispatch(idx) &*
@@ -165,7 +165,9 @@ case class DesugarPermissionOperators[Pre <: Generation]()
             idx
           ) < PointerBlockLength(dispatch(p))(FramedPtrBlockLength) &* Perm(
             PointerLocation(
-              PointerAdd(dispatch(p), dispatch(idx))(FramedPtrOffset)
+              PointerAdd(dispatch(p), dispatch(idx), dispatch(size.get))(
+                FramedPtrOffset
+              )
             )(FramedPtrOffset),
             dispatch(perm),
           )

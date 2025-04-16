@@ -1787,9 +1787,9 @@ case class PVLToCol[G](
       case ValArray(_, _, arr, _, dim, _) =>
         ValidArray(convert(arr), convert(dim))
       case ValPointer(_, _, ptr, _, n, _, perm, _) =>
-        PermPointer(convert(ptr), convert(n), convert(perm))
+        PermPointer(convert(ptr), convert(n), convert(perm), None)
       case ValPointerIndex(_, _, ptr, _, idx, _, perm, _) =>
-        PermPointerIndex(convert(ptr), convert(idx), convert(perm))
+        PermPointerIndex(convert(ptr), convert(idx), convert(perm), None)
       case ValPointerBlock(_, _, ptr, _) => PointerBlock(convert(ptr))(blame(e))
       case ValPointerBlockLength(_, _, ptr, _) =>
         PointerBlockLength(convert(ptr))(blame(e))

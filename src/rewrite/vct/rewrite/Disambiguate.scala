@@ -142,12 +142,9 @@ case class Disambiguate[Pre <: Generation]() extends Rewriter[Pre] {
         else
           Mult(dispatch(left), dispatch(right))
       case op @ AmbiguousPlus(left, right) =>
+        // Pointer is already rewritten in LangCToCol
         if (op.isProcessOp)
           ProcessChoice(dispatch(left), dispatch(right))
-        else if (op.isPointerOp)
-          unfoldPointerAdd(
-            PointerAdd(dispatch(left), dispatch(right))(op.blame)
-          )
         else if (op.isSeqOp)
           Concat(dispatch(left), dispatch(right))
         else if (op.isSetOp)
@@ -165,10 +162,9 @@ case class Disambiguate[Pre <: Generation]() extends Rewriter[Pre] {
         else
           Plus(dispatch(left), dispatch(right))
       case op @ AmbiguousMinus(left, right) =>
+        // Pointer is already rewritten in LangCToCol
         if (op.isSetOp)
           SetMinus(dispatch(left), dispatch(right))
-        else if (op.isPointerOp)
-          PointerAdd(dispatch(left), dispatch(UMinus(right)))(op.blame)
         else if (op.isBagOp)
           BagMinus(dispatch(left), dispatch(right))
         else if (op.isVectorOp)
@@ -200,9 +196,8 @@ case class Disambiguate[Pre <: Generation]() extends Rewriter[Pre] {
 
         cons(dispatch(op.left), dispatch(op.right))
       case op @ AmbiguousSubscript(collection, index) =>
-        if (op.isPointerOp)
-          PointerSubscript(dispatch(collection), dispatch(index))(op.blame)
-        else if (op.isMapOp)
+        // Pointer is already rewritten in LangCToCol
+        if (op.isMapOp)
           MapGet(dispatch(collection), dispatch(index))(op.blame)
         else if (op.isArrayOp)
           ArraySubscript(dispatch(collection), dispatch(index))(op.blame)
@@ -353,11 +348,4 @@ case class Disambiguate[Pre <: Generation]() extends Rewriter[Pre] {
     }
   }
 
-  def unfoldPointerAdd[G](e: PointerAdd[G]): PointerAdd[G] =
-    e.pointer match {
-      case inner @ PointerAdd(_, _) =>
-        val PointerAdd(pointerInner, offsetInner) = unfoldPointerAdd(inner)
-        PointerAdd(pointerInner, Plus(offsetInner, e.offset)(e.o))(e.blame)(e.o)
-      case _ => e
-    }
 }

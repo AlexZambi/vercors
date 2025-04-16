@@ -409,6 +409,16 @@ case class LangSpecificToCol[Pre <: Generation](
       case inv: CPPInvocation[Pre] => cpp.invocation(inv)
       case lambda: CPPLambdaDefinition[Pre] =>
         cpp.rewriteLambdaDefinition(lambda)
+      case sub @ AmbiguousSubscript(collection, _)
+          if collection.t.asPointer.isDefined =>
+        c.subscriptPointer(sub)
+      case add: AmbiguousPlus[Pre] if add.isPointerOp => c.addPointer(add)
+      case sub: AmbiguousMinus[Pre] if sub.isPointerOp =>
+        c.addPointer(
+          AmbiguousPlus(sub.left, UMinus(sub.right)(sub.o))(sub.blame)(sub.o)
+        )
+      case pp: PermPointer[Pre] => c.permPointer(pp)
+      case pp: PermPointerIndex[Pre] => c.permPointerIndex(pp)
       case arrSub @ AmbiguousSubscript(_, _) => cpp.rewriteSubscript(arrSub)
       case unfolding: Unfolding[Pre] => {
         cpp.checkPredicateFoldingAllowed(unfolding.res)

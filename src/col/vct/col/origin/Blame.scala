@@ -1530,6 +1530,10 @@ object FramedPtrBlockOffset
     extends PanicBlame(
       "offset query in `p == null ? _ : \\pointer_block_offset(p)` should always be ok."
     )
+object FramedPtrStride
+    extends PanicBlame(
+      "stride query in `p == null ? _ : \\pointer_stride(p)` should always be ok."
+    )
 object FramedMapGet
     extends PanicBlame(
       "access in `∀k. k \\in m.keys ==> ...m[k]...` should always be ok."

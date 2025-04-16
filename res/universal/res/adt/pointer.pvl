@@ -21,8 +21,10 @@ adt `block` {
 adt `pointer` {
   pure `block` pointer_block(`pointer` p);
   pure int pointer_offset(`pointer` p);
+  pure int pointer_byte_offset(`pointer` p);
+  pure int pointer_stride(`pointer` p);
   pure `pointer` pointer_inv(ref r);
-  pure int ptr_address(`pointer` p, int stride);
+  pure int ptr_address(`pointer` p);
 
   // the block offset is valid wrt the length of the block
   axiom (∀ `pointer` p;
@@ -33,11 +35,13 @@ adt `pointer` {
 
   axiom (∀ `pointer` p; pointer_inv({:ptr_deref(p):}) == p);
 
-  axiom (∀ `pointer` p, int stride; stride > 0; {:ptr_address(p, stride):} == `block`.block_address(`pointer`.pointer_block(p)) + (`pointer`.pointer_offset(p) * stride));
+  axiom (∀ `pointer` p; {:ptr_address(p):} == `block`.block_address(`pointer`.pointer_block(p)) + `pointer`.pointer_offset(p) * pointer_stride(p) + pointer_byte_offset(p));
 
-  axiom (∀ `pointer` p, int stride; stride > 0; {:ptr_address(p, stride):} > 0);
+  axiom (∀ `pointer` p; {:ptr_address(p):} > 0);
+  axiom (∀ `pointer` p; {:pointer_stride(p):} > 0);
+  axiom (∀ `pointer` p; {:pointer_byte_offset(p):} >= 0 && {:pointer_byte_offset(p):} < pointer_stride(p));
 
-  axiom (∀ `pointer` p1, `pointer` p2, int stride; stride > 0 && ({:ptr_address(p1, stride):} == {:ptr_address(p2, stride):} && {:pointer_block(p1):} == {:pointer_block(p2):}) ==> p1 == p2);
+  axiom (∀ `pointer` p1, `pointer` p2; ({:ptr_address(p1):} == {:ptr_address(p2):} && {:pointer_block(p1):} == {:pointer_block(p2):}) ==> p1 == p2);
 
   axiom ptr_add_axiom();
 
@@ -50,13 +54,21 @@ pure ref ptr_deref(`pointer` p) =
   `block`.loc(`pointer`.pointer_block(p), `pointer`.pointer_offset(p));
 
 decreases;
-requires 0 <= `pointer`.pointer_offset(p) + offset;
-requires `pointer`.pointer_offset(p) + offset < `block`.block_length(`pointer`.pointer_block(p));
+requires stride == `pointer`.pointer_stride(p) ==> 0 <= `pointer`.pointer_offset(p) + offset;
+requires stride != `pointer`.pointer_stride(p) ==> 0 <= `pointer`.pointer_offset(p) + (`pointer`.pointer_byte_offset(p) + offset * stride) / `pointer`.pointer_stride(p);
+requires stride != `pointer`.pointer_stride(p) && `pointer`.pointer_offset(p) + (`pointer`.pointer_byte_offset(p) + offset * stride) / `pointer`.pointer_stride(p) == 0 ==> (`pointer`.pointer_byte_offset(p) + offset * stride) % `pointer`.pointer_stride(p) == 0;
+requires stride == `pointer`.pointer_stride(p) ==> `pointer`.pointer_offset(p) + offset < `block`.block_length(`pointer`.pointer_block(p));
+requires stride != `pointer`.pointer_stride(p) ==> `pointer`.pointer_offset(p) + (`pointer`.pointer_byte_offset(p) + offset * stride) / `pointer`.pointer_stride(p) < `block`.block_length(`pointer`.pointer_block(p));
+requires stride != `pointer`.pointer_stride(p) && `pointer`.pointer_offset(p) + (`pointer`.pointer_byte_offset(p) + offset * stride) / `pointer`.pointer_stride(p) == `block`.block_length(`pointer`.pointer_block(p)) - 1 ==> (offset * stride) % `pointer`.pointer_stride(p) == 0;
 // Assumed here for performance reasons
 ensures offset == 0 ==> \result == p;
-ensures `pointer`.pointer_offset(\result) == `pointer`.pointer_offset(p) + offset;
+ensures stride == `pointer`.pointer_stride(p) ==> `pointer`.pointer_offset(\result) == `pointer`.pointer_offset(p) + offset;
+ensures stride == `pointer`.pointer_stride(p) ==> `pointer`.pointer_byte_offset(\result) == `pointer`.pointer_byte_offset(p);
+ensures stride != `pointer`.pointer_stride(p) ==> `pointer`.pointer_offset(\result) == `pointer`.pointer_offset(p) + (`pointer`.pointer_byte_offset(p) + offset * stride) / `pointer`.pointer_stride(p);
+ensures stride != `pointer`.pointer_stride(p) ==> `pointer`.pointer_byte_offset(\result) == (`pointer`.pointer_byte_offset(p) + offset * stride) % `pointer`.pointer_stride(p);
 ensures `pointer`.pointer_block(\result) == `pointer`.pointer_block(p);
-pure `pointer` ptr_add(`pointer` p, int offset);
+ensures `pointer`.pointer_stride(\result) == `pointer`.pointer_stride(p);
+pure `pointer` ptr_add(`pointer` p, int offset, int stride);
 
 decreases;
 ensures (\forall `pointer` p, int offset, int i;
@@ -64,7 +76,7 @@ ensures (\forall `pointer` p, int offset, int i;
     `pointer`.pointer_offset(p) + offset < `block`.block_length(`pointer`.pointer_block(p)) &&
     0 <= `pointer`.pointer_offset(p) + offset + i &&
     `pointer`.pointer_offset(p) + offset + i < `block`.block_length(`pointer`.pointer_block(p));
-    {:ptr_add(ptr_add(p, offset), i):} == ptr_add(p, offset + i));
+    {:ptr_add(ptr_add(p, offset, `pointer`.pointer_stride(p)), i, `pointer`.pointer_stride(p)):} == ptr_add(p, offset + i, `pointer`.pointer_stride(p)));
 pure boolean ptr_add_axiom() = true;
 
 decreases;
@@ -72,11 +84,10 @@ ensures (∀ `pointer` p, int i, int j;
     0 <= `pointer`.pointer_offset(p) + i &&
     `pointer`.pointer_offset(p) + i < `block`.block_length(`pointer`.pointer_block(p)) &&
     0 <= `pointer`.pointer_offset(p) + j &&
-    `pointer`.pointer_offset(p) + j < `block`.block_length(`pointer`.pointer_block(p)); (i == j) == ({:ptr_add(p, i):} == {:ptr_add(p, j):}));
+    `pointer`.pointer_offset(p) + j < `block`.block_length(`pointer`.pointer_block(p)); (i == j) == ({:ptr_add(p, i, `pointer`.pointer_stride(p)):} == {:ptr_add(p, j, `pointer`.pointer_stride(p)):}));
 pure boolean ptr_add_axiom2() = true;
 
 decreases;
-requires stride > 0;
-ensures `pointer`.ptr_address(\result, stride) == address;
-pure `pointer` ptr_from_address(int address, int stride);
+ensures `pointer`.ptr_address(\result) == address;
+pure `pointer` ptr_from_address(int address);
 

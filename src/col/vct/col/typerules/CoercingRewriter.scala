@@ -1379,7 +1379,8 @@ abstract class CoercingRewriter[Pre <: Generation]()
       case IdleToken(thread) => IdleToken(cls(thread))
       case Implies(left, right) => Implies(bool(left), res(right))
       case FunctionOf(e, ref) => FunctionOf(e, ref)
-      case f @ FreePointer(p) => FreePointer(pointer(p)._1)(f.blame)
+      case f @ FreePointer(p, size) =>
+        FreePointer(pointer(p)._1, int(size))(f.blame)
       case InlinePattern(inner, parent, group) =>
         InlinePattern(inner, parent, group)
       case inv @ InstanceFunctionInvocation(
@@ -1604,14 +1605,16 @@ abstract class CoercingRewriter[Pre <: Generation]()
       case Neq(left, right) => nonAny(e, left, right, Neq(_, _))
       case na @ NewArray(element, dims, moreDims, initialize) =>
         NewArray(element, dims.map(int), moreDims, initialize)(na.blame)
-      case na @ NewPointerArray(element, size, unique) =>
-        NewPointerArray(element, size, unique)(na.blame)
-      case nca @ NewConstPointerArray(element, size) =>
-        NewConstPointerArray(element, size)(nca.blame)
-      case na @ NewNonNullPointerArray(element, size, unique) =>
-        NewNonNullPointerArray(element, size, unique)(na.blame)
-      case nca @ NewNonNullConstPointerArray(element, size) =>
-        NewNonNullConstPointerArray(element, size)(nca.blame)
+      case na @ NewPointerArray(element, size, unique, elementSize) =>
+        NewPointerArray(element, size, unique, int(elementSize))(na.blame)
+      case nca @ NewConstPointerArray(element, size, elementSize) =>
+        NewConstPointerArray(element, size, int(elementSize))(nca.blame)
+      case na @ NewNonNullPointerArray(element, size, unique, elementSize) =>
+        NewNonNullPointerArray(element, size, unique, int(elementSize))(
+          na.blame
+        )
+      case nca @ NewNonNullConstPointerArray(element, size, elementSize) =>
+        NewNonNullConstPointerArray(element, size, int(elementSize))(nca.blame)
       case NewObject(cls) => NewObject(cls)
       case NewObjectUnique(cls, m) => NewObjectUnique(cls, m)
       case NoPerm() => NoPerm()
@@ -1633,10 +1636,10 @@ abstract class CoercingRewriter[Pre <: Generation]()
       case OptSomeTyped(t, e) => OptSomeTyped(t, coerce(e, t))
       case Or(left, right) => Or(bool(left), bool(right))
       case Perm(loc, perm) => Perm(loc, rat(perm))
-      case PermPointer(p, len, perm) =>
-        PermPointer(pointer(p)._1, int(len), rat(perm))
-      case PermPointerIndex(p, idx, perm) =>
-        PermPointerIndex(pointer(p)._1, int(idx), rat(perm))
+      case PermPointer(p, len, perm, size) =>
+        PermPointer(pointer(p)._1, int(len), rat(perm), size)
+      case PermPointerIndex(p, idx, perm, size) =>
+        PermPointerIndex(pointer(p)._1, int(idx), rat(perm), size)
       case Permutation(left, right) =>
         val (coercedLeft, leftType) = seq(left)
         val (coercedRight, rightType) = seq(right)
@@ -1654,8 +1657,8 @@ abstract class CoercingRewriter[Pre <: Generation]()
           floatOp2(plus, (l, r) => Plus(l, r)),
           Plus(rat(left), rat(right)),
         )
-      case add @ PointerAdd(p, offset) =>
-        PointerAdd(pointer(p)._1, int(offset))(add.blame)
+      case add @ PointerAdd(p, offset, size) =>
+        PointerAdd(pointer(p)._1, int(offset), int(size))(add.blame)
       case to @ PointerToAdt(p, t) => PointerToAdt(pointer(p)._1, t)(to.blame)
       case blck @ PointerBlock(p) => PointerBlock(pointer(p)._1)(blck.blame)
       case addr @ PointerAddress(p, elementSize) =>
@@ -1664,9 +1667,10 @@ abstract class CoercingRewriter[Pre <: Generation]()
         PointerBlockLength(pointer(p)._1)(len.blame)
       case off @ PointerBlockOffset(p) =>
         PointerBlockOffset(pointer(p)._1)(off.blame)
+      case str @ PointerStride(p) => PointerStride(pointer(p)._1)(str.blame)
       case len @ PointerLength(p) => PointerLength(pointer(p)._1)(len.blame)
-      case get @ PointerSubscript(p, index) =>
-        PointerSubscript(pointer(p)._1, int(index))(get.blame)
+      case get @ PointerSubscript(p, index, size) =>
+        PointerSubscript(pointer(p)._1, int(index), int(size))(get.blame)
       case PointerEq(l, r, elementSize) =>
         PointerEq(pointer(l)._1, pointer(r)._1, elementSize)
       case PointerNeq(l, r, elementSize) =>

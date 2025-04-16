@@ -712,8 +712,12 @@ case class SimplifyNestedQuantifiers[Pre <: Generation]()
   case class Array[G](index: Expr[G], subnodes: Seq[Node[G]], array: Expr[G])
       extends Subscript[G]
 
-  case class Pointer[G](index: Expr[G], subnodes: Seq[Node[G]], array: Expr[G])
-      extends Subscript[G]
+  case class Pointer[G](
+      index: Expr[G],
+      subnodes: Seq[Node[G]],
+      array: Expr[G],
+      size: Expr[G],
+  ) extends Subscript[G]
 
   case class Sequence[G](index: Expr[G], subnodes: Seq[Node[G]], array: Expr[G])
       extends Subscript[G]
@@ -729,10 +733,10 @@ case class SimplifyNestedQuantifiers[Pre <: Generation]()
           testSubscript(Array(e.index, e.subnodes, e.arr))
         case e @ SeqSubscript(_, _) =>
           testSubscript(Sequence(e.index, e.subnodes, e.seq))
-        case e @ PointerSubscript(_, _) =>
-          testSubscript(Pointer(e.index, e.subnodes, e.pointer))
-        case e @ PointerAdd(_, _) =>
-          testSubscript(Pointer(e.offset, e.subnodes, e.pointer))
+        case e @ PointerSubscript(_, _, _) =>
+          testSubscript(Pointer(e.index, e.subnodes, e.pointer, e.size))
+        case e @ PointerAdd(_, _, _) =>
+          testSubscript(Pointer(e.offset, e.subnodes, e.pointer, e.size))
         case _ =>
           e.subnodes.to(LazyList).map(search).collectFirst { case Some(sub) =>
             sub
@@ -1031,9 +1035,13 @@ case class SimplifyNestedQuantifiers[Pre <: Generation]()
                 Seq(SeqSubscript(newGen(seqIndex.array), xNewVar)(triggerBlame))
               )
             case arrayIndex: Pointer[Pre] =>
-              Seq(Seq(PointerSubscript(newGen(arrayIndex.array), xNewVar)(
-                triggerBlame
-              )))
+              Seq(Seq(
+                PointerSubscript(
+                  newGen(arrayIndex.array),
+                  xNewVar,
+                  newGen(arrayIndex.size),
+                )(triggerBlame)
+              ))
           }
 
         for (x <- vars) {

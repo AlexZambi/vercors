@@ -75,13 +75,18 @@ case class VariableToPointer[Pre <: Generation]() extends Rewriter[Pre] {
   def makeNewPointerArray(t: Type[Post])(implicit o: Origin): NewPointer[Post] =
     t match {
       case TNonNullPointer(innerType, unique) =>
-        NewNonNullPointerArray[Post](innerType, const(1), unique)(PanicBlame(
-          "Size is > 0"
-        ))
+        NewNonNullPointerArray[Post](
+          innerType,
+          const(1),
+          unique,
+          const(1), // TODO: What to do here?
+        )(PanicBlame("Size is > 0"))
       case TNonNullConstPointer(innerType) =>
-        NewNonNullConstPointerArray[Post](innerType, const(1))(PanicBlame(
-          "Size is > 0"
-        ))
+        NewNonNullConstPointerArray[Post](
+          innerType,
+          const(1),
+          const(1), // TODO: What to do here?
+        )(PanicBlame("Size is > 0"))
     }
 
   // TODO: Replace the asByReferenceClass checks with something that more clearly communicates that we want to exclude all reference types

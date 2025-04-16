@@ -10,6 +10,7 @@ import vct.col.resolve.lang.{CPP, Util}
 import vct.col.util.AstBuildHelpers.{
   ExprBuildHelpers,
   c_const,
+  const,
   foldStar,
   tt,
   withResult,
@@ -103,6 +104,9 @@ trait SYCLTBufferImpl[G] extends SYCLTBufferOps[G] {
         Local[G](hostDataVar.ref),
         Local[G](sizeVar.ref),
         WritePerm(),
+        Some(
+          const(1)
+        ), // TODO: Add proper size once we start caring about addresses in CPP
       )),
     )(o.where(name = "exclusive_hostData_access"))
   }
@@ -136,6 +140,9 @@ trait SYCLTBufferImpl[G] extends SYCLTBufferOps[G] {
                 Local[G](hostDataVar.ref),
                 Local[G](sizeVar.ref),
                 WritePerm(),
+                Some(
+                  const(1)
+                ), // TODO: Add proper size once we start caring about addresses in CPP
               ),
             )),
             ensures = UnitAccountedPredicate(foldStar(Seq(
@@ -143,6 +150,9 @@ trait SYCLTBufferImpl[G] extends SYCLTBufferOps[G] {
                 Local[G](hostDataVar.ref),
                 Local[G](sizeVar.ref),
                 WritePerm(),
+                Some(
+                  const(1)
+                ), // TODO: Add proper size once we start caring about addresses in CPP
               ),
               validArray(
                 result,
@@ -166,6 +176,7 @@ trait SYCLTBufferImpl[G] extends SYCLTBufferOps[G] {
                     PointerSubscript(
                       Local[G](hostDataVar.ref),
                       Local[G](indexVar.ref),
+                      const(1), // TODO: Add proper size once we start caring about addresses in CPP
                     )(copyHostdataToBufferBlame),
                   ),
               ),
@@ -240,6 +251,7 @@ trait SYCLTBufferImpl[G] extends SYCLTBufferOps[G] {
                   PointerSubscript(
                     Local[G](hostDataVar.ref),
                     Local[G](indexVar.ref),
+                    const(1), // TODO: Add proper size once we start caring about addresses in CPP
                   )(copyBufferToHostdataBlame)
                 )),
                 body =
@@ -251,6 +263,7 @@ trait SYCLTBufferImpl[G] extends SYCLTBufferOps[G] {
                     PointerSubscript(
                       Local[G](hostDataVar.ref),
                       Local[G](indexVar.ref),
+                      const(1), // TODO: Add proper size once we start caring about addresses in CPP
                     )(copyBufferToHostdataBlame),
                     ArraySubscript[G](
                       Local[G](bufferVar.ref),
