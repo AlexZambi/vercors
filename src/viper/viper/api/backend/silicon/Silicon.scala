@@ -86,7 +86,8 @@ case class Silicon(
 
     val silicon = new viper.silicon.Silicon(reporter)
 
-    val z3Config = z3Settings.map { case (k, v) => s"$k=$v" }.mkString(" ")
+    val newZ3Settings = (z3Settings + ("combined_solver.solver2_timeout" -> "15000")) + ("combined_solver.solver2_unknown" -> "2")
+    val z3Config = newZ3Settings.map { case (k, v) => s"$k=$v" }.mkString(" ")
 
     var siliconConfig = Seq(
       "--assertTimeout",
