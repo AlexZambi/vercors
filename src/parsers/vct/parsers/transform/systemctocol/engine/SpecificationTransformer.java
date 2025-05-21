@@ -2,6 +2,7 @@ package vct.parsers.transform.systemctocol.engine;
 
 import de.tub.pes.syscir.sc_model.SCVariable;
 import de.tub.pes.syscir.sc_model.variables.SCArray;
+import de.tub.pes.syscir.sc_model.variables.SCClassInstance;
 import scala.Option;
 import scala.reflect.ClassTag$;
 import vct.col.ast.*;
@@ -13,6 +14,11 @@ import vct.parsers.transform.systemctocol.colmodel.COLSystem;
 import vct.parsers.transform.systemctocol.colmodel.ProcessClass;
 import vct.parsers.transform.systemctocol.util.GeneratedBlame;
 import vct.parsers.transform.systemctocol.util.OriGen;
+
+import de.tub.pes.syscir.sc_model.expressions.*;
+import vct.parsers.transform.systemctocol.util.Interval;
+import vct.parsers.transform.systemctocol.util.Bound;
+import scala.math.BigInt;
 
 /**
  * Creates specifications for methods and loops encountered in the SystemC system.
@@ -51,6 +57,209 @@ public class SpecificationTransformer<T> {
      */
     public LoopInvariant<T> create_loop_invariant(Expr<T> path_condition) {
         return new LoopInvariant<>(create_basic_invariant(path_condition), Option.empty(), new GeneratedBlame<>(), OriGen.create());
+    }
+
+    // equals
+    // toString
+    // hashCode
+    // compare
+    // apply
+    // collect
+    // count
+    // o
+    // write
+    // t
+    // ref
+    // copy
+    // check
+    // exists
+    // bind
+    // visit
+    // canEqual
+    // productIterator
+    // productElement
+    // productArity
+    // productPrefix
+    // productElementNames
+    // productElementName
+    // unapply
+    // foreach
+    // collectFirst
+    // layout
+    // highlight
+    // serialize
+    // serialize
+    // serializeFamily
+    // serializeFamily
+    // subnodes
+    // rewriteDefault
+    // rewriteDefault
+    // rewriteDefault
+    // rewrite
+    // rewrite$default$1
+    // unsafeTransmuteGeneration
+    // debugLayout
+    // show
+    // toInlineString
+    // flatCollect
+    // checkTrans
+    // checkContextRecursor
+    // enterCheckContext
+    // enterCheckContextScopes
+    // enterCheckContextUndeclared
+    // enterCheckContextRoScopes
+    // enterCheckContextRoScopeReason
+    // enterCheckContextCurrentApplicable
+    // enterCheckContextInPreCondition
+    // enterCheckContextInPostCondition
+    // enterCheckContextCurrentChoreography
+    // enterCheckContextCurrentReceiverEndpoint
+    // enterCheckContextCurrentParticipatingEndpoints
+    // enterCheckContextInChor
+    // enterCheckContextInEndpointExpr
+    // enterCheckContextInCommunicateInvariant
+    // enterCheckContextDeclarationStack
+    // toStringWithContext
+    // checkSubType
+    // unfoldStar
+    // unfoldProcessPar
+    // precedence
+    // assoc
+    // nassoc
+    // lassoc
+    // rassoc
+    // t$lzycompute
+    // ref_$eq
+
+    /**
+     * Generate loop invariant for a for loop.
+     *
+     * @param expr Expression of the for loop
+     * @param sc_inst SystemC class instance that this expression refers to
+     * @param obj Object representing the current access depth up to and including <code>sc_inst</code>
+     * @param path_cond Path condition at this statement (only used for the first expression of a block)
+     * @return A loop invariant that contains at least permissions needed for basic verification, the path condition, 
+     * and possibly generated loop bounds.
+     */
+    public LoopInvariant<T> create_for_loop_invariant(Statement<T> init, Expr<T> cond, Statement<T> update, ForLoopExpression expr, SCClassInstance sc_inst, Expr<T> obj, Expr<T> path_cond) {
+        
+        BinaryExpression initializer = (BinaryExpression) expr.getInitializer();
+        BinaryExpression condition = (BinaryExpression) expr.getCondition();
+        BinaryExpression iterator = (BinaryExpression) expr.getIterator();
+        java.util.List<Expression> body = expr.getLoopBody();
+
+        Integer init_value = getBinaryConstantRight(initializer);
+        Integer transfer_value = getTransferFunctionValue(iterator);
+        String comp = condition.getOp();
+        Integer cond_value = getBinaryConstantRight(condition);
+
+        if (init_value == null ||
+            transfer_value == null ||
+            cond_value == null) {
+
+            return this.create_loop_invariant(path_cond);
+        }
+        
+        Assign<T> assign = (Assign<T>) init;
+        Deref<T> target = (Deref<T>) assign.target();
+        IntegerValue<T> value = (IntegerValue<T>) assign.value();
+        
+
+
+        Interval loop_bounds = getLoopBounds(init_value, transfer_value, cond_value, comp);
+        IntegerValue<T> lower = new IntegerValue<>(BigInt.apply(loop_bounds.getLowerValue()), OriGen.create());
+        IntegerValue<T> upper = new IntegerValue<>(BigInt.apply(loop_bounds.getUpperValue()), OriGen.create());
+        LessEq<T> lower_bound = new LessEq<>(lower, target, OriGen.create());
+        LessEq<T> upper_bound = new LessEq<>(target, upper, OriGen.create());
+        And<T> bound_invariant = new And<>(lower_bound, upper_bound, OriGen.create());
+
+        System.out.println("Bound invariant");
+        System.out.println(bound_invariant);
+
+        // System.out.println("Found bounds");
+        // System.out.println(loop_bounds);
+        System.out.println();
+        System.out.println();
+        System.out.println();
+
+        return new LoopInvariant<>(col_system.fold_star(java.util.List.of(this.create_basic_invariant(path_cond), bound_invariant)), Option.empty(), new GeneratedBlame<>(), OriGen.create());
+        // return this.create_loop_invariant(path_cond);
+    }
+
+    public static Interval getLoopBounds(Integer init, Integer transfer_value, Integer cond, String comp) {
+        Interval bounds = new Interval(init);
+        Interval new_bounds = bounds;
+        do {
+            Interval next = bounds.join(new_bounds.add(transfer_value));
+            bounds = new_bounds;
+            new_bounds = next;
+        } while (!bounds.equals(new_bounds) && isGuarded(bounds, cond, comp));
+        return bounds;
+    }
+
+    public static boolean isGuarded(Interval interval, Integer guard, String comp) {
+        Bound guard_bound = new Bound(guard);
+        switch (comp) {
+            case "<" : {
+                return interval.getLower().compareTo(guard_bound) < 0 && interval.getUpper().compareTo(guard_bound) < 0;
+            }
+            case "<=" : {
+                return interval.getLower().compareTo(guard_bound) <= 0 && interval.getUpper().compareTo(guard_bound) <= 0;
+            }
+            case ">" : {
+                return interval.getLower().compareTo(guard_bound) > 0 && interval.getUpper().compareTo(guard_bound) > 0;
+            }
+            case ">=" : {
+                return interval.getLower().compareTo(guard_bound) >= 0 && interval.getUpper().compareTo(guard_bound) >= 0;
+            }
+            default: {
+                return false;
+            }
+        }
+    }
+
+    public static Integer getTransferFunctionValue(BinaryExpression expr) {
+        Expression right = expr.getRight();
+        if (!(right instanceof BinaryExpression)) {
+            return null;
+        }
+        BinaryExpression binary = (BinaryExpression) right;
+        Integer value = getBinaryConstantRight(binary);
+        if (value == null) {
+            return null;
+        }
+        String op = binary.getOp();
+        if (op.equals("-")) {
+            return -value;
+        }
+        if (op.equals("+")) {
+            return value;
+        }
+        return null;
+    }
+
+    public static Integer getBinaryConstantRight(BinaryExpression expr) {
+        Expression right = expr.getRight();
+        if (!(right instanceof ConstantExpression)) {
+            return null;
+        }
+        ConstantExpression value_expression = (ConstantExpression) right;
+        String value_string = value_expression.getValue();
+        try {
+            Integer value = new Integer(value_string);
+            return value;
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    public static String getBinaryVariableLeft(BinaryExpression expr) {
+        Expression left = expr.getLeft();
+        if (!(left instanceof SCVariableExpression)) {
+            return null;
+        }
+        SCVariableExpression variable_expression = (SCVariableExpression) left;
+        return variable_expression.getVar().getName();
     }
 
     /**
