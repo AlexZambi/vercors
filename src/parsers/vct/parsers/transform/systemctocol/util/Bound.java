@@ -41,7 +41,7 @@ public class Bound implements Comparable<Bound> {
      * 
      * @param bound the bound to copy. 
      */
-    private Bound(Bound bound) {
+    public Bound(Bound bound) {
         this.value = bound.value;
         this.minus_inf = bound.minus_inf;
         this.plus_inf = bound.plus_inf;
@@ -78,6 +78,8 @@ public class Bound implements Comparable<Bound> {
      * @return whether the bound is finite or not.
      */
     public boolean isFinite() {return this.value != null;}
+
+    public boolean isUndefined() {return this.undef;}
 
     /**
      * Retrieve the bound value.
@@ -128,6 +130,38 @@ public class Bound implements Comparable<Bound> {
      */
     public Bound add(Bound other) {
         return add(this, other);
+    }
+
+    public static Bound mult(Bound a, Bound b) {
+        if (a.isUndefined() || b.isUndefined()) {
+            return UNDEFINED;
+        }
+        if (a.isFinite() && b.isFinite()) {
+            return new Bound(a.getValue() * b.getValue());
+        }
+        boolean aPos = a.compareTo(new Bound(0)) < 0 ? true : false;
+        boolean bPos = b.compareTo(new Bound(0)) < 0 ? true : false;
+        if (aPos == bPos) {
+            return INFINITY;
+        }
+        return MINUS_INFINITY;
+    }
+
+    public Bound mult(Bound other) {
+        return mult(this, other);
+    }
+
+    public static Bound minus(Bound bound) {
+        if (bound.isFinite()) {
+            return new Bound(-bound.getValue());
+        }
+        if (bound.equals(UNDEFINED)) {
+            return UNDEFINED;
+        }
+        if (bound.equals(INFINITY)) {
+            return MINUS_INFINITY;
+        }
+        return INFINITY;
     }
 
     public static Bound min(Bound a, Bound b) {
