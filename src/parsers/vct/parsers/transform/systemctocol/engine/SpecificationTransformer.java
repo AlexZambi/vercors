@@ -15,6 +15,8 @@ import vct.parsers.transform.systemctocol.colmodel.ProcessClass;
 import vct.parsers.transform.systemctocol.util.GeneratedBlame;
 import vct.parsers.transform.systemctocol.util.OriGen;
 
+import vct.parsers.transform.systemctocol.engine.VariableTransformer;
+import vct.parsers.transform.systemctocol.engine.ExpressionTransformer;
 import de.tub.pes.syscir.sc_model.expressions.*;
 import vct.parsers.transform.systemctocol.util.Interval;
 import vct.parsers.transform.systemctocol.util.Bound;
@@ -141,8 +143,7 @@ public class SpecificationTransformer<T> {
      * @return A loop invariant that contains at least permissions needed for basic verification, the path condition, 
      * and possibly generated loop bounds.
      */
-    public LoopInvariant<T> create_for_loop_invariant(Statement<T> init, Expr<T> cond, Statement<T> update, ForLoopExpression expr, SCClassInstance sc_inst, Expr<T> obj, Expr<T> path_cond) {
-        
+    public LoopInvariant<T> create_for_loop_invariant(ForLoopExpression expr, SCClassInstance sc_inst, Expr<T> obj, Expr<T> path_cond) {
         BinaryExpression initializer = (BinaryExpression) expr.getInitializer();
         BinaryExpression condition = (BinaryExpression) expr.getCondition();
         BinaryExpression iterator = (BinaryExpression) expr.getIterator();
@@ -160,30 +161,23 @@ public class SpecificationTransformer<T> {
             return this.create_loop_invariant(path_cond);
         }
         
-        Assign<T> assign = (Assign<T>) init;
-        Deref<T> target = (Deref<T>) assign.target();
-        IntegerValue<T> value = (IntegerValue<T>) assign.value();
-        
-
-
         Interval loop_bounds = getLoopBounds(init_value, transfer_value, cond_value, comp);
         IntegerValue<T> lower = new IntegerValue<>(BigInt.apply(loop_bounds.getLowerValue()), OriGen.create());
         IntegerValue<T> upper = new IntegerValue<>(BigInt.apply(loop_bounds.getUpperValue()), OriGen.create());
-        LessEq<T> lower_bound = new LessEq<>(lower, target, OriGen.create());
-        LessEq<T> upper_bound = new LessEq<>(target, upper, OriGen.create());
+        Expr<T> var = getVariableFromExpression((SCVariableExpression) initializer.getLeft(), sc_inst);
+        LessEq<T> lower_bound = new LessEq<>(lower, var, OriGen.create());
+        LessEq<T> upper_bound = new LessEq<>(var, upper, OriGen.create());
         And<T> bound_invariant = new And<>(lower_bound, upper_bound, OriGen.create());
 
-        System.out.println("Bound invariant");
-        System.out.println(bound_invariant);
-
-        // System.out.println("Found bounds");
-        // System.out.println(loop_bounds);
-        System.out.println();
-        System.out.println();
-        System.out.println();
-
         return new LoopInvariant<>(col_system.fold_star(java.util.List.of(this.create_basic_invariant(path_cond), bound_invariant)), Option.empty(), new GeneratedBlame<>(), OriGen.create());
-        // return this.create_loop_invariant(path_cond);
+    }
+
+    public Expr<T> getVariableFromExpression(SCVariableExpression expr, SCClassInstance sc_inst) {
+        SCVariable var_raw = expr.getVar();
+        VariableTransformer<T> variableTransformer = new VariableTransformer<>(sc_inst, col_system);
+        InstanceField<T> var_field = variableTransformer.transform_variable_to_instance_field(var_raw);
+        Ref<T, InstanceField<T>> var_ref = new DirectRef<>(var_field, ClassTag$.MODULE$.apply(InstanceField.class));
+        return new Deref<>(col_system.THIS, var_ref, new GeneratedBlame<>(), OriGen.create());
     }
 
     public static Interval getLoopBounds(Integer init, Integer transfer_value, Integer cond, String comp) {

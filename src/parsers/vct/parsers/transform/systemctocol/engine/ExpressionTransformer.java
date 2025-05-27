@@ -478,7 +478,7 @@ public class ExpressionTransformer<T> {
         Statement<T> update = create_statement(expr.getIterator(), sc_inst, obj, path_cond);
 
         SpecificationTransformer<T> specification_transformer = new SpecificationTransformer<>(col_class, col_system, m);
-        LoopContract<T> contract = specification_transformer.create_for_loop_invariant(init, cond, update, expr, sc_inst, obj, path_cond);
+        LoopContract<T> contract = specification_transformer.create_for_loop_invariant(expr, sc_inst, obj, path_cond);
 
         Expr<T> new_path_cond = (path_cond.equals(col_system.TRUE)) ? cond : new Star<>(path_cond, cond, OriGen.create());
         Block<T> body = expression_list_to_block(expr.getLoopBody(), sc_inst, obj, new_path_cond);
