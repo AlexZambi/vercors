@@ -1,5 +1,7 @@
 package vct.parsers.transform.systemctocol.engine;
 
+import javax.sound.sampled.Line;
+
 import de.tub.pes.syscir.sc_model.SCVariable;
 import de.tub.pes.syscir.sc_model.variables.SCArray;
 import de.tub.pes.syscir.sc_model.variables.SCClassInstance;
@@ -12,14 +14,10 @@ import vct.col.ref.Ref;
 import vct.parsers.transform.systemctocol.colmodel.COLClass;
 import vct.parsers.transform.systemctocol.colmodel.COLSystem;
 import vct.parsers.transform.systemctocol.colmodel.ProcessClass;
-import vct.parsers.transform.systemctocol.util.GeneratedBlame;
-import vct.parsers.transform.systemctocol.util.OriGen;
-
 import vct.parsers.transform.systemctocol.engine.VariableTransformer;
 import vct.parsers.transform.systemctocol.engine.ExpressionTransformer;
 import de.tub.pes.syscir.sc_model.expressions.*;
-import vct.parsers.transform.systemctocol.util.Interval;
-import vct.parsers.transform.systemctocol.util.Bound;
+import vct.parsers.transform.systemctocol.util.*;
 import scala.math.BigInt;
 
 /**
@@ -156,11 +154,12 @@ public class SpecificationTransformer<T> {
 
         if (init_value == null ||
             transfer_value == null ||
-            cond_value == null) {
+            cond_value == null ||
+            !(initializer.getLeft() instanceof SCVariableExpression)) {
 
             return this.create_loop_invariant(path_cond);
         }
-        
+
         Interval loop_bounds = getLoopBounds(init_value, transfer_value, cond_value, comp);
         IntegerValue<T> lower = new IntegerValue<>(BigInt.apply(loop_bounds.getLowerValue()), OriGen.create());
         IntegerValue<T> upper = new IntegerValue<>(BigInt.apply(loop_bounds.getUpperValue()), OriGen.create());
@@ -168,6 +167,22 @@ public class SpecificationTransformer<T> {
         LessEq<T> lower_bound = new LessEq<>(lower, var, OriGen.create());
         LessEq<T> upper_bound = new LessEq<>(var, upper, OriGen.create());
         And<T> bound_invariant = new And<>(lower_bound, upper_bound, OriGen.create());
+
+        LinearExpression lin = new LinearExpression();
+        lin = lin.add(var, 1);
+        lin = lin.add(1);
+
+        LinearExpression lin2 = new LinearExpression();
+        lin2 = lin2.add(var, -3);
+        lin2 = lin2.add(12);
+
+        System.out.println();
+        System.out.println();
+        System.out.println(lin);
+        System.out.println(lin2);
+        System.out.println(lin.add(lin2));
+        System.out.println();
+        System.out.println();
 
         return new LoopInvariant<>(col_system.fold_star(java.util.List.of(this.create_basic_invariant(path_cond), bound_invariant)), Option.empty(), new GeneratedBlame<>(), OriGen.create());
     }
