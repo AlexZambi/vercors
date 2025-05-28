@@ -179,6 +179,70 @@ public class LinearExpression {
     }
 
     /**
+     * Multiply a linear expression by a constant factor.
+     * 
+     * @param expr the expression to mutate
+     * @param value the scalar factor
+     * @return the resuling linear expression
+     */
+    public static LinearExpression mult(LinearExpression expr, Bound value) {
+        Map<Object, Bound> terms = new HashMap<>(expr.getTerms());
+        Bound constant = new Bound(expr.getConstant());
+        for (Object var : terms.keySet()) {
+            terms.put(var, value.mult(terms.get(var)));
+        }
+        constant = constant.mult(value);
+        return new LinearExpression(terms, constant);
+    }
+
+    /**
+     * Multiply a linear expression by a constant factor.
+     * 
+     * @param expr the expression to mutate
+     * @param value the scalar factor
+     * @return the resuling linear expression
+     */
+    public static LinearExpression mult(LinearExpression expr, Integer value) {
+        return mult(expr, new Bound(value));
+    }
+
+    /**
+     * Multiply the linear expression by a constant factor.
+     * 
+     * @param value the scalar factor
+     * @return the resuling linear expression
+     */
+    public LinearExpression mult(Bound value) {
+        return mult(this, value);
+    }
+
+    /**
+     * Multiply the linear expression by a constant factor.
+     * 
+     * @param value the scalar factor
+     * @return the resuling linear expression
+     */
+    public LinearExpression mult(Integer value) {
+        return mult(this, value);
+    }
+
+    /**
+     * Give the negation of an expression (i.e. all coefficients and the constant are multiplied by -1).abstract
+     * 
+     * @param expr the expression to mutate
+     * @return the resulting linear expression
+     */
+    public static LinearExpression minus(LinearExpression expr) {
+        Map<Object, Bound> terms = new HashMap<>(expr.getTerms());
+        Bound constant = new Bound(expr.getConstant());
+        for (Object var : terms.keySet()) {
+            terms.put(var, Bound.minus(terms.get(var)));
+        }
+        constant = Bound.minus(constant);
+        return new LinearExpression(terms, constant);
+    }
+
+    /**
      * Replace a variable in a linear expression. If the variable being replaced is not present
      * in the original expression, then the original expression is returned
      * 
@@ -213,6 +277,38 @@ public class LinearExpression {
      */
     public LinearExpression replace(Object oldVar, Object newVar) {
         return replace(this, oldVar, newVar);
+    }
+
+    /**
+     * Replace a variable with a linear expression. If the variable being replaced is not present
+     * in the original expression, then the original expression is returned.
+     * 
+     * @param expr the expression to mutate
+     * @param var the variable to be replaced
+     * @param rep the expression to replace with
+     * @return a new linear expression representing the result
+     */
+    public static LinearExpression replace(LinearExpression expr, Object var, LinearExpression rep) {
+        if (!expr.getTerms().containsKey(var)) {
+            return new LinearExpression(expr);
+        }
+        LinearExpression result = new LinearExpression(expr);
+        Bound coeff = result.getTerms().remove(var);
+        LinearExpression scaled = rep.mult(coeff);
+        return result.add(scaled);
+    }
+
+    /**
+     * Replace a variable with a linear expression. If the variable being replaced is not present
+     * in the original expression, then the original expression is returned.
+     * 
+     * @param expr the expression to mutate
+     * @param var the variable to be replaced
+     * @param rep the expression to replace with
+     * @return a new linear expression representing the result
+     */
+    public LinearExpression replace(Object var, LinearExpression rep) {
+        return replace(this, var, rep);
     }
 
     /**

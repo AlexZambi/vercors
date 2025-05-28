@@ -179,15 +179,18 @@ public class SpecificationTransformer<T> {
         LinearExpression total = lin.add(lin2);
     
         System.out.println();
-        System.out.println();
+        System.out.println("Expressions with a single variable");
         System.out.println(lin);
         System.out.println(lin2);
         System.out.println();
+        System.out.println("Sum of the expressions");
         System.out.println(total);
         System.out.println();
+        System.out.println("Replace the variable with N");
         total = total.replace(var, "N");
         System.out.println(total);
         total = total.evaluate("N", 1);
+        System.out.println("Evaluate the previous with N = 1");
         System.out.println(total);
         System.out.println();
         
@@ -195,11 +198,30 @@ public class SpecificationTransformer<T> {
         two = two.add("N", 2);
         two = two.add("i", 3);
         two = two.add(1);
+        System.out.println("Expression with two variables");
         System.out.println(two);
+        System.out.println("Negation of the expression");
+        System.out.println(LinearExpression.minus(two));
         two = two.replace("N", "i");
+        System.out.println("Replace N with i");
         System.out.println(two);
         two = two.evaluate("i", 1);
+        System.out.println("Evaluate with i = 1");
         System.out.println(two);
+        System.out.println();
+
+        LinearExpression a  = new LinearExpression();
+        a = a.add("x", 2);
+        a = a.add("y", 3);
+        a = a.add(2);
+        LinearExpression b = new LinearExpression();
+        b = b.add("x", 3);
+        b = b.add("z", 4);
+        b = b.add(1);
+        System.out.println("a: " + a.toString());
+        System.out.println("b: " + b.toString());
+        System.out.println("Replace y by expression b");
+        System.out.println(a.replace("y", b));
         System.out.println();
         System.out.println();
 
