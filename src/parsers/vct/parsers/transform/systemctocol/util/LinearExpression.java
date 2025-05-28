@@ -193,9 +193,14 @@ public class LinearExpression {
         }
         Map<Object, Bound> terms = new HashMap<>(expr.getTerms());
         Bound constant = new Bound(expr.getConstant());
-        terms.put(newVar, terms.get(oldVar));
-        terms.remove(oldVar);
-        return new LinearExpression(terms, constant);
+        if (!expr.getTerms().containsKey(newVar)) {
+            terms.put(newVar, terms.get(oldVar));
+            terms.remove(oldVar);
+            return new LinearExpression(terms, constant);
+        }
+        Bound oldCoeff = terms.remove(oldVar);
+        LinearExpression result = new LinearExpression(terms, constant);
+        return result.add(newVar, oldCoeff);
     }
 
     /**

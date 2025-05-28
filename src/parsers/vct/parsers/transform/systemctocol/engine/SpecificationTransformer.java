@@ -185,11 +185,21 @@ public class SpecificationTransformer<T> {
         System.out.println();
         System.out.println(total);
         System.out.println();
-        System.out.println();
         total = total.replace(var, "N");
         System.out.println(total);
         total = total.evaluate("N", 1);
         System.out.println(total);
+        System.out.println();
+        
+        LinearExpression two = new LinearExpression();
+        two = two.add("N", 2);
+        two = two.add("i", 3);
+        two = two.add(1);
+        System.out.println(two);
+        two = two.replace("N", "i");
+        System.out.println(two);
+        two = two.evaluate("i", 1);
+        System.out.println(two);
         System.out.println();
         System.out.println();
 
