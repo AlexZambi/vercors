@@ -3,25 +3,55 @@ package vct.parsers.transform.systemctocol.util;
 import java.util.Map;
 import java.util.HashMap;
 
+/**
+ * Class representing a linear expression. A linear expression is a linear combination of
+ * variables with integer coefficients and a constant integer term.
+ */
 public class LinearExpression {
+    /**
+     * Variable terms are stored as a item with items of the form <Variable, Coefficient>.
+     * This ensures that a variable may only appear once in the linear expression.
+     */
     private Map<Object, Bound> terms;
     private Bound constant;
 
+    /**
+     * Construct a linear expression that is the constant 0.
+     */
     public LinearExpression() {
         this.terms = new HashMap<>();
         this.constant = new Bound(0);
     }
 
+    /**
+     * Construct a new linear expression.
+     * 
+     * @param terms the variables and coefficients of the expression
+     * @param constant the constant term
+     */
     public LinearExpression(Map<Object, Bound> terms, Bound constant) {
         this.terms = terms;
         this.constant = constant;
     }
 
+    /**
+     * Copy constructor.
+     */
     public LinearExpression(LinearExpression other) {
         this.terms = new HashMap<>(other.getTerms());
         this.constant = new Bound(other.getConstant());
     }
 
+    /**
+     * Add a variable with coefficient to an expressin. If the expression did not contain
+     * this terms before, then it is simply added. If the expression contains the variable
+     * already, then the coefficients are added.
+     * 
+     * @param expr the expression to mutate
+     * @param var the variable to add
+     * @param coeff the coefficient of the variable
+     * @return a new linear expression representing the result
+     */
     public static LinearExpression add(LinearExpression expr, Object var, Bound coeff) {
         Map<Object, Bound> terms = new HashMap<>(expr.getTerms());
         Bound constant = expr.getConstant();
@@ -34,36 +64,99 @@ public class LinearExpression {
         return new LinearExpression(terms, constant);
     }
 
+    /**
+     * Add a variable with coefficient to an expressin. If the expression did not contain
+     * this terms before, then it is simply added. If the expression contains the variable
+     * already, then the coefficients are added.
+     * 
+     * @param expr the expression to mutate
+     * @param var the variable to add
+     * @param coeff the coefficient of the variable
+     * @return a new linear expression representing the result
+     */
     public static LinearExpression add(LinearExpression expr, Object var, Integer coeff) {
         return add(expr, var, new Bound(coeff));
     }
 
+    /**
+     * Add a variable with coefficient to the expressin. If the expression did not contain
+     * this terms before, then it is simply added. If the expression contains the variable
+     * already, then the coefficients are added.
+     * 
+     * @param var the variable to add
+     * @param coeff the coefficient of the variable
+     * @return a new linear expression representing the result
+     */
     public LinearExpression add(Object var, Bound coeff) {
         return add(this, var, coeff);
     }
 
+    /**
+     * Add a variable with coefficient to the expressin. If the expression did not contain
+     * this terms before, then it is simply added. If the expression contains the variable
+     * already, then the coefficients are added.
+     * 
+     * @param var the variable to add
+     * @param coeff the coefficient of the variable
+     * @return a new linear expression representing the result
+     */
     public LinearExpression add(Object var, Integer coeff) {
         return add(this, var, coeff);
     }
 
+    /**
+     * Add a constant term to an expression.
+     * 
+     * @param expr the expression to mutate
+     * @param constant the term to add
+     * @return a new linear expression representing the result
+     */
     public static LinearExpression add(LinearExpression expr, Bound constant) {
         Map<Object, Bound> terms = new HashMap<>(expr.getTerms());
         Bound prevConstant = expr.getConstant();
         return new LinearExpression(terms, prevConstant.add(constant));
     }
 
+    /**
+     * Add a constant term to an expression.
+     * 
+     * @param expr the expression to mutate
+     * @param constant the term to add
+     * @return a new linear expression representing the result
+     */
     public static LinearExpression add(LinearExpression expr, Integer constant) {
         return add(expr, new Bound(constant));
     }
 
+    /**
+     * Add a constant term to the expression.
+     * 
+     * @param expr the expression to mutate
+     * @param constant the term to add
+     * @return a new linear expression representing the result
+     */
     public LinearExpression add(Bound constant) {
         return add(this, constant);
     }
 
+    /**
+     * Add a constant term to the expression.
+     * 
+     * @param expr the expression to mutate
+     * @param constant the term to add
+     * @return a new linear expression representing the result
+     */
     public LinearExpression add(Integer constant) {
         return add(this, constant);
     }
 
+    /**
+     * Add two linear expressions. Like terms are collected together.
+     * 
+     * @param a the first expression
+     * @param b the second expression
+     * @return a new linear expression representing the result
+     */
     public static LinearExpression add(LinearExpression a, LinearExpression b) {
         LinearExpression result = new LinearExpression(a);
         for (Object var : b.getTerms().keySet()) {
@@ -74,10 +167,26 @@ public class LinearExpression {
         return result;
     }
 
+    /**
+     * Add a linear expression to this one. Like terms are collected together.
+     * 
+     * @param a the first expression
+     * @param b the second expression
+     * @return a new linear expression representing the result
+     */
     public LinearExpression add(LinearExpression other) {
         return add(this, other);
     }
 
+    /**
+     * Replace a variable in a linear expression. If the variable being replaced is not present
+     * in the original expression, then the original expression is returned
+     * 
+     * @param expr the expression to mutate
+     * @param oldVar the variable to be replaced
+     * @param newVar the variable to replace with
+     * @return a new linear expression representing the result
+     */
     public static LinearExpression replace(LinearExpression expr, Object oldVar, Object newVar) {
         if (!expr.getTerms().containsKey(oldVar)) {
             return new LinearExpression(expr);
@@ -89,10 +198,26 @@ public class LinearExpression {
         return new LinearExpression(terms, constant);
     }
 
+    /**
+     * Replace a variable in the linear expression. If the variable being replaced is not present
+     * in the original expression, then the original expression is returned
+     * 
+     * @param oldVar the variable to be replaced
+     * @param newVar the variable to replace with
+     * @return a new linear expression representing the result
+     */
     public LinearExpression replace(Object oldVar, Object newVar) {
         return replace(this, oldVar, newVar);
     }
 
+    /**
+     * Evaluate an expression by replacing a variable by a constant term.
+     * 
+     * @param expr the expression to mutate
+     * @param var the variable to be replaced
+     * @param value the value to replace with
+     * @return a new linear expression representing the result
+     */
     public static LinearExpression evaluate(LinearExpression expr, Object var, Bound value) {
         if (!expr.getTerms().containsKey(var)) {
             return new LinearExpression(expr);
@@ -109,18 +234,47 @@ public class LinearExpression {
         return new LinearExpression(terms, newConstant);
     }
 
+    /**
+     * Evaluate an expression by replacing a variable by a constant term.
+     * 
+     * @param expr the expression to mutate
+     * @param var the variable to be replaced
+     * @param value the value to replace with
+     * @return a new linear expression representing the result
+     */
     public static LinearExpression evaluate(LinearExpression expr, Object var, Integer value) {
         return evaluate(expr, var, new Bound(value));
     }
 
+    /**
+     * Evaluate the expression by replacing a variable by a constant term.
+     * 
+     * @param var the variable to be replaced
+     * @param value the value to replace with
+     * @return a new linear expression representing the result
+     */
     public LinearExpression evaluate(Object var, Bound value) {
         return evaluate(this, var, value);
     }
 
+    /**
+     * Evaluate the expression by replacing a variable by a constant term.
+     * 
+     * @param var the variable to be replaced
+     * @param value the value to replace with
+     * @return a new linear expression representing the result
+     */
     public LinearExpression evaluate(Object var, Integer value) {
         return evaluate(this, var, value);
     }
 
+    /**
+     * Evaluate an expression by replacing a set of variables by constant terms.
+     * 
+     * @param expr the expression to mutate
+     * @param instantiation the map of variables to constant values
+     * @return a new linear expression representing the result
+     */
     public static LinearExpression evaluate(LinearExpression expr, Map<Object, Bound> instantiation) {
         LinearExpression result = new LinearExpression(expr);
         for (Object var : instantiation.keySet()) {
@@ -130,8 +284,24 @@ public class LinearExpression {
         return result;
     }
 
+    /**
+     * Evaluate the expression by replacing a set of variables by constant terms.
+     * 
+     * @param expr the expression to mutate
+     * @param instantiation the map of variables to constant values
+     * @return a new linear expression representing the result
+     */
     public LinearExpression evaluate(Map<Object, Bound> instantiation) {
         return evaluate(this, instantiation);
+    }
+
+    /**
+     * Check if the expression is just a constant.
+     * 
+     * @return true if the expression if constant, false otherwise
+     */
+    public boolean isConstant() {
+        return this.terms.size() == 0;
     }
 
     public Map<Object, Bound> getTerms() {return this.terms;}
