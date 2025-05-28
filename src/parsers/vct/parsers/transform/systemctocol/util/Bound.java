@@ -132,6 +132,13 @@ public class Bound implements Comparable<Bound> {
         return add(this, other);
     }
 
+    /**
+     * Multiply two bounds together.
+     * 
+     * @param a the first bound
+     * @param b the second bound
+     * @return the resulting bound
+     */
     public static Bound mult(Bound a, Bound b) {
         if (a.isUndefined() || b.isUndefined()) {
             return UNDEFINED;
@@ -147,10 +154,22 @@ public class Bound implements Comparable<Bound> {
         return MINUS_INFINITY;
     }
 
+    /**
+     * Multiply this bound with another.
+     * 
+     * @param other the other bound
+     * @return the resulting bound
+     */
     public Bound mult(Bound other) {
         return mult(this, other);
     }
 
+    /**
+     * Get the complement of a bound (e.g. the complement of 1 is -1).
+     * 
+     * @param bound the bound to complement
+     * @return the resulting bound
+     */
     public static Bound minus(Bound bound) {
         if (bound.isFinite()) {
             return new Bound(-bound.getValue());
@@ -164,6 +183,13 @@ public class Bound implements Comparable<Bound> {
         return INFINITY;
     }
 
+    /**
+     * Get the minimum of two bounds.
+     * 
+     * @param a the first bound
+     * @param b the second bound
+     * @return the minimum of the two
+     */
     public static Bound min(Bound a, Bound b) {
         if (a.compareTo(b) < 0) {
             return a;
@@ -172,6 +198,13 @@ public class Bound implements Comparable<Bound> {
         }
     }
 
+    /**
+     * Get the maximum of two bounds.
+     * 
+     * @param a the first bound
+     * @param b the second bound
+     * @return the maximum of the two
+     */
     public static Bound max(Bound a, Bound b) {
         if (a.compareTo(b) > 0) {
             return a;
