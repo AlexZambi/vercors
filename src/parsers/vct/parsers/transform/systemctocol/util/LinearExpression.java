@@ -59,7 +59,11 @@ public class LinearExpression {
         if (prevCoeff == null) {
             terms.put(var, coeff);
         } else {
-            terms.put(var, prevCoeff.add(coeff));
+            Bound resulting_coeff = prevCoeff.add(coeff);
+            if (!resulting_coeff.equals(new Bound(0)))
+            {
+                terms.put(var, resulting_coeff);
+            }
         }
         return new LinearExpression(terms, constant);
     }
