@@ -91,17 +91,17 @@ public class SpecificationTransformer<T> {
             cond.getOp() == ComparisonType.EQ || 
             cond.getOp() == ComparisonType.NEQ) {
 
-            return null;
+            return this.create_loop_invariant(path_cond);
         }
 
         // we consider only the case when there is only one counter variable
         if (!init_var.isUnivariate() || !cond.getLeft().isUnivariate()) {
-            return null;
+            return this.create_loop_invariant(path_cond);
         }
         Object init_variable = init_var.getVariable();
         Object cond_variable = cond.getLeft().getVariable();
         if (!init_variable.equals(cond_variable)) {
-            return null;
+            return this.create_loop_invariant(path_cond);
         }
         Expr<T> var = (Expr<T>) init_variable;
 
