@@ -1,7 +1,8 @@
 package vct.parsers.transform.systemctocol.util;
 
+import java.util.Comparator;
 import java.util.Map;
-import java.util.HashMap;
+import java.util.TreeMap;
 
 /**
  * Class representing a linear expression. A linear expression is a linear combination of
@@ -15,11 +16,18 @@ public class LinearExpression {
     private Map<Object, Bound> terms;
     private Bound constant;
 
+    public class StringComparator implements Comparator<Object> {
+        @Override
+        public int compare(Object a, Object b) {
+            return a.toString().compareTo(b.toString());
+        }
+    }
+
     /**
      * Construct a linear expression that is the constant 0.
      */
     public LinearExpression() {
-        this.terms = new HashMap<>();
+        this.terms = new TreeMap<>(new StringComparator());
         this.constant = new Bound(0);
     }
 
@@ -38,7 +46,8 @@ public class LinearExpression {
      * Copy constructor.
      */
     public LinearExpression(LinearExpression other) {
-        this.terms = new HashMap<>(other.getTerms());
+        this.terms = new TreeMap<>(new StringComparator());
+        this.terms.putAll(other.terms);
         this.constant = new Bound(other.getConstant());
     }
 
@@ -53,9 +62,13 @@ public class LinearExpression {
      * @return a new linear expression representing the result
      */
     public static LinearExpression add(LinearExpression expr, Object var, Bound coeff) {
-        Map<Object, Bound> terms = new HashMap<>(expr.getTerms());
+        Map<Object, Bound> terms = new TreeMap<>(expr.new StringComparator());
+        terms.putAll(expr.getTerms());
         Bound constant = expr.getConstant();
-        Bound prevCoeff = terms.getOrDefault(var, null);
+        Bound prevCoeff = null;
+        if (terms.containsKey(var)) {
+            prevCoeff = terms.get(var);
+        }
         if (prevCoeff == null) {
             terms.put(var, coeff);
         } else {
@@ -63,6 +76,8 @@ public class LinearExpression {
             if (!resulting_coeff.equals(new Bound(0)))
             {
                 terms.put(var, resulting_coeff);
+            } else {
+                terms.remove(var);
             }
         }
         return new LinearExpression(terms, constant);
@@ -116,7 +131,8 @@ public class LinearExpression {
      * @return a new linear expression representing the result
      */
     public static LinearExpression add(LinearExpression expr, Bound constant) {
-        Map<Object, Bound> terms = new HashMap<>(expr.getTerms());
+        Map<Object, Bound> terms = new TreeMap<>(expr.new StringComparator());
+        terms.putAll(expr.getTerms());
         Bound prevConstant = expr.getConstant();
         return new LinearExpression(terms, prevConstant.add(constant));
     }
@@ -193,7 +209,8 @@ public class LinearExpression {
         if (value.equals(new Bound(0))) {
             return new LinearExpression();
         }
-        Map<Object, Bound> terms = new HashMap<>(expr.getTerms());
+        Map<Object, Bound> terms = new TreeMap<>(expr.new StringComparator());
+        terms.putAll(expr.getTerms());
         Bound constant = new Bound(expr.getConstant());
         for (Object var : terms.keySet()) {
             terms.put(var, value.mult(terms.get(var)));
@@ -240,7 +257,8 @@ public class LinearExpression {
      * @return the resulting linear expression
      */
     public static LinearExpression minus(LinearExpression expr) {
-        Map<Object, Bound> terms = new HashMap<>(expr.getTerms());
+        Map<Object, Bound> terms = new TreeMap<>(expr.new StringComparator());
+        terms.putAll(expr.getTerms());
         Bound constant = new Bound(expr.getConstant());
         for (Object var : terms.keySet()) {
             terms.put(var, Bound.minus(terms.get(var)));
@@ -262,7 +280,8 @@ public class LinearExpression {
         if (!expr.getTerms().containsKey(oldVar)) {
             return new LinearExpression(expr);
         }
-        Map<Object, Bound> terms = new HashMap<>(expr.getTerms());
+        Map<Object, Bound> terms = new TreeMap<>(expr.new StringComparator());
+        terms.putAll(expr.getTerms());
         Bound constant = new Bound(expr.getConstant());
         if (!expr.getTerms().containsKey(newVar)) {
             terms.put(newVar, terms.get(oldVar));
@@ -330,8 +349,23 @@ public class LinearExpression {
         if (!expr.getTerms().containsKey(var)) {
             return new LinearExpression(expr);
         }
-        Map<Object, Bound> terms = new HashMap<>(expr.getTerms());
+        LinearExpression result = new LinearExpression();
+        Map<Object, Bound> terms = new TreeMap<>(expr.new StringComparator());
+        terms.putAll(expr.getTerms());
         Bound constant = expr.getConstant();
+
+        // check if any of the variables are actually min-max expressions and
+        // try to evaluate those as well
+        for (Object variable : terms.keySet()) {
+            if (!(variable instanceof MinMaxExpression)) {
+                continue;
+            }
+            Bound coeff = terms.remove(variable);
+            MinMaxExpression min_max = (MinMaxExpression) variable;
+            MinMaxExpression eval = min_max.evaluate(var, value);
+            LinearExpression solved = eval.solve().mult(coeff);
+            result = result.add(solved);
+        }
 
         // take the coefficient and remove the variable from the expression
         Bound coeff = terms.remove(var);
@@ -339,7 +373,7 @@ public class LinearExpression {
         // evaluate the new constant term
         Bound newConstant = coeff.mult(value).add(constant);
 
-        return new LinearExpression(terms, newConstant);
+        return new LinearExpression(terms, newConstant).add(result);
     }
 
     /**

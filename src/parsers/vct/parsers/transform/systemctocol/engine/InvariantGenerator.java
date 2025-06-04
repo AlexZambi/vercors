@@ -12,6 +12,7 @@ import de.tub.pes.syscir.sc_model.expressions.*;
 import de.tub.pes.syscir.sc_model.variables.SCClassInstance;
 import vct.parsers.transform.systemctocol.colmodel.COLSystem;
 import vct.parsers.transform.systemctocol.util.*;
+import vct.parsers.transform.systemctocol.util.MinMaxExpression.MinMaxType;
 
 public class InvariantGenerator<T> {
     private COLSystem<T> col_system;
@@ -20,18 +21,59 @@ public class InvariantGenerator<T> {
         this.col_system = col_system;
     }
 
-    public Expr<T> generateInvariant(LinearExpression init_value, Compare cond, LinearExpression transfer_function, Expr<T> var, SCClassInstance sc_inst) {
+    public Expr<T> generateInvariant(LinearExpression init_value, Compare cond, LinearExpression transfer_function, Expr<T> var) {
+        MinMaxExpression m = new MinMaxExpression(MinMaxType.MIN, new LinearExpression().add("N", 1).add(2), new LinearExpression().add("N", 2).add(1));
+        System.out.println("min-max:");
+        System.out.println(m);
+        System.out.println("is solvable: " + m.isSolvable());
+        System.out.println("eval m for N = 1");
+        m = m.evaluate("N", new Bound(1));
+        System.out.println(m);
+        System.out.println("is solvable: " + m.isSolvable());
+        System.out.println(m.solve());
+        System.out.println();
+        System.out.println();
+
+        LinearExpression l1 = new LinearExpression().add("N", 2).add(1);
+        LinearExpression l2 = new LinearExpression().add("N", 2).add(3);
+        MinMaxExpression m1 = new MinMaxExpression(MinMaxType.MAX, l1 , l2);
+        System.out.println(m1);
+        System.out.println("is solvable: " + m1.isSolvable());
+        System.out.println(m1.solve());
+        System.out.println();
+        System.out.println();
+
+        LinearExpression l = new LinearExpression().add(m1, 2).add("N", 2).add(1);
+        System.out.println("mixed expression:");
+        System.out.println(l);
+        System.out.println("evaluate for N = 1");
+        System.out.println(l.evaluate("N", 1));
+        System.out.println();
+        System.out.println();
+
+        LinearExpression l3 = new LinearExpression().add("N", 1).add("k", 2).add(1);
+        MinMaxExpression m2 = new MinMaxExpression(MinMaxType.MIN, l3, l);
+        System.out.println(m2);
+        System.out.println("evaluate for N = 1");
+        System.out.println(m2.evaluate("N", new Bound(1)));
+
+        System.out.println();
+        System.out.println();
+        System.out.println();
+
         // if constant loop, get bounds
         if (init_value.isConstant() && cond.getRight().isConstant() && transfer_function.isUnivariate()) {
             return getConstantBoundInvariant(init_value, cond, transfer_function, var);
         }
 
         // if we have a variable guard, but constant initial value
-        if (init_value.isConstant()) {
-            return getVariableGuardInvariant(init_value, cond, transfer_function, var);
-        }
+        // if (init_value.isConstant()) {
+            
+        // }
 
-        return null;
+        return getVariableGuardInvariant(init_value, cond, transfer_function, var);
+
+        // return null;
     }
 
     public Expr<T> getVariableFromExpression(SCVariableExpression expr, SCClassInstance sc_inst) {
