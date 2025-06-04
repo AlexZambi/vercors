@@ -405,6 +405,54 @@ public class LinearExpression {
         return this.terms.size() == 0;
     }
 
+    /**
+     * Check if the expression is univariate (i.e. has exactly one variable).
+     * 
+     * @return true if the expression is univariate, false otherwise.
+     */
+    public boolean isUnivariate() {
+        return this.terms.keySet().size() == 1;
+    }
+
+    /**
+     * Check if the expression contains a certain variable.
+     * 
+     * @param var the variable
+     * @return true if the expression contains the variable, false otherwise
+     */
+    public boolean hasVariable(Object var) {
+        return this.terms.containsKey(var);
+    }
+
+    /**
+     * Get the coefficient of a variable.
+     * 
+     * @param var the variable
+     * @return the coeffcient of the variable if the variable is present, null  otherwise
+     */
+    public Bound getCoefficient(LinearExpression expr, Object var) {
+        if (!hasVariable(var)) {
+            return null;
+        }
+        return this.terms.get(var);
+    }
+
+    /**
+     * Get the variable of a univariate expression.
+     * 
+     * @return the variable of the expression if it is univariate, null otherwise
+     */
+    public Object getVariable() {
+        if (!isUnivariate()) {
+            return null;
+        }
+        Object result = null;
+        for (Object var : this.terms.keySet()) {
+            result = var;
+        }
+        return result;
+    }
+
     public Map<Object, Bound> getTerms() {return this.terms;}
 
     public Bound getConstant() {return this.constant;}
@@ -433,5 +481,37 @@ public class LinearExpression {
             output += this.constant.toString();
         }
         return output;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (!(obj instanceof LinearExpression)) {
+            return false;
+        }
+        LinearExpression other = (LinearExpression) obj;
+        // other has all variables of this with the same coefficients
+        for (Object var : this.terms.keySet()) {
+            if (!other.terms.containsKey(var)) {
+                return false;
+            }
+            Bound this_coeff = this.terms.get(var);
+            Bound other_coeff = other.terms.get(var);
+            if (!this_coeff.equals(other_coeff)) {
+                return false;
+            }
+        }
+        // this has all variables of other with the same coefficients
+        for (Object var : other.terms.keySet()) {
+            if (!this.terms.containsKey(var)) {
+                return false;
+            }
+            Bound this_coeff = this.terms.get(var);
+            Bound other_coeff = other.terms.get(var);
+            if (!this_coeff.equals(other_coeff)) {
+                return false;
+            }
+        }
+        // we also have the same constant terms
+        return this.constant.equals(other.constant);
     }
 }

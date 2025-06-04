@@ -3,7 +3,7 @@ package vct.parsers.transform.systemctocol.util;
 /**
  * Enum representing types of comparison operators.
  */
-public enum Comparison {
+public enum ComparisonType {
     EQ {
         @Override
         public String toString() {return "=";}

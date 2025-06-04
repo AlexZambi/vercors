@@ -147,85 +147,41 @@ public class SpecificationTransformer<T> {
         BinaryExpression iterator = (BinaryExpression) expr.getIterator();
         java.util.List<Expression> body = expr.getLoopBody();
 
-        Integer init_value = getBinaryConstantRight(initializer);
-        Integer transfer_value = getTransferFunctionValue(iterator);
-        String comp = condition.getOp();
-        Integer cond_value = getBinaryConstantRight(condition);
+        LinearExpression init_var = getLinearExpression(initializer.getLeft(), sc_inst);
+        LinearExpression init_value = getLinearExpression(initializer.getRight(), sc_inst);
 
-        if (init_value == null ||
-            transfer_value == null ||
-            cond_value == null ||
-            !(initializer.getLeft() instanceof SCVariableExpression)) {
+        LinearExpression transfer_var = getLinearExpression(iterator.getLeft(), sc_inst);
+        LinearExpression transfer_function = getLinearExpression(iterator.getRight(), sc_inst);
+        Compare cond = getCompare(condition, sc_inst);
+
+        if (init_var == null ||
+            init_value == null ||
+            transfer_var == null ||
+            transfer_function == null ||
+            cond == null) {
 
             return this.create_loop_invariant(path_cond);
         }
 
-        Interval loop_bounds = getLoopBounds(init_value, transfer_value, cond_value, comp);
-        IntegerValue<T> lower = new IntegerValue<>(BigInt.apply(loop_bounds.getLowerValue()), OriGen.create());
-        IntegerValue<T> upper = new IntegerValue<>(BigInt.apply(loop_bounds.getUpperValue()), OriGen.create());
-        Expr<T> var = getVariableFromExpression((SCVariableExpression) initializer.getLeft(), sc_inst);
-        LessEq<T> lower_bound = new LessEq<>(lower, var, OriGen.create());
-        LessEq<T> upper_bound = new LessEq<>(var, upper, OriGen.create());
-        And<T> bound_invariant = new And<>(lower_bound, upper_bound, OriGen.create());
+        // we consider only the case when there is only one counter variable
+        if (!init_var.isUnivariate() || !cond.getLeft().isUnivariate()) {
+            return this.create_loop_invariant(path_cond);
+        }
+        Object init_variable = init_var.getVariable();
+        Object cond_variable = cond.getLeft().getVariable();
+        if (!init_variable.equals(cond_variable)) {
+            return this.create_loop_invariant(path_cond);
+        }
 
-        LinearExpression lin = new LinearExpression();
-        lin = lin.add(var, 1);
-        lin = lin.add(1);
+        Expr<T> var = (Expr<T>) init_variable;
 
-        LinearExpression lin2 = new LinearExpression();
-        lin2 = lin2.add(var, -3);
-        lin2 = lin2.add(12);
+        // if constant loop, get bounds
+        if (init_value.isConstant() && cond.getRight().isConstant() && transfer_function.isUnivariate()) {
+            Expr<T> bound_invariant = getConstantBoundInvariant(init_value, cond, transfer_function, var);
+            return new LoopInvariant<>(col_system.fold_star(java.util.List.of(this.create_basic_invariant(path_cond), bound_invariant)), Option.empty(), new GeneratedBlame<>(), OriGen.create());
+        }
 
-        LinearExpression total = lin.add(lin2);
-    
-        System.out.println();
-        System.out.println("Expressions with a single variable");
-        System.out.println(lin);
-        System.out.println(lin2);
-        System.out.println();
-        System.out.println("Sum of the expressions");
-        System.out.println(total);
-        System.out.println();
-        System.out.println("Replace the variable with N");
-        total = total.replace(var, "N");
-        System.out.println(total);
-        total = total.evaluate("N", 1);
-        System.out.println("Evaluate the previous with N = 1");
-        System.out.println(total);
-        System.out.println();
-        
-        LinearExpression two = new LinearExpression();
-        two = two.add("N", 2);
-        two = two.add("i", 3);
-        two = two.add(1);
-        System.out.println("Expression with two variables");
-        System.out.println(two);
-        System.out.println("Negation of the expression");
-        System.out.println(LinearExpression.minus(two));
-        two = two.replace("N", "i");
-        System.out.println("Replace N with i");
-        System.out.println(two);
-        two = two.evaluate("i", 1);
-        System.out.println("Evaluate with i = 1");
-        System.out.println(two);
-        System.out.println();
-
-        LinearExpression a  = new LinearExpression();
-        a = a.add("x", 2);
-        a = a.add("y", 3);
-        a = a.add(2);
-        LinearExpression b = new LinearExpression();
-        b = b.add("x", 3);
-        b = b.add("z", 4);
-        b = b.add(1);
-        System.out.println("a: " + a.toString());
-        System.out.println("b: " + b.toString());
-        System.out.println("Replace y by expression b");
-        System.out.println(a.replace("y", b));
-        System.out.println();
-        System.out.println();
-
-        return new LoopInvariant<>(col_system.fold_star(java.util.List.of(this.create_basic_invariant(path_cond), bound_invariant)), Option.empty(), new GeneratedBlame<>(), OriGen.create());
+        return this.create_loop_invariant(path_cond);
     }
 
     public Expr<T> getVariableFromExpression(SCVariableExpression expr, SCClassInstance sc_inst) {
@@ -236,80 +192,96 @@ public class SpecificationTransformer<T> {
         return new Deref<>(col_system.THIS, var_ref, new GeneratedBlame<>(), OriGen.create());
     }
 
-    public static Interval getLoopBounds(Integer init, Integer transfer_value, Integer cond, String comp) {
-        Interval bounds = new Interval(init);
+    public Compare getCompare(Expression expr, SCClassInstance sc_inst) {
+        if (!(expr instanceof BinaryExpression)) {
+            return null;
+        }
+        BinaryExpression bin = (BinaryExpression) expr;
+        ComparisonType op = null;
+        switch (bin.getOp()) {
+            case "<": op = ComparisonType.LESSER; break;
+            case "<=": op = ComparisonType.LESSER_EQ; break;
+            case ">": op = ComparisonType.GREATER; break;
+            case ">=": op = ComparisonType.GREATER_EQ; break;
+            default: op = null; break;
+        }
+        if (op == null) {
+            return null;
+        }
+        LinearExpression left = getLinearExpression(bin.getLeft(), sc_inst);
+        LinearExpression right = getLinearExpression(bin.getRight(), sc_inst);
+        if (left == null || right == null) {
+            return null;
+        }
+        return new Compare(op, left, right);
+    }
+
+    public LinearExpression getLinearExpression(Expression expr, SCClassInstance sc_inst) {
+        LinearExpression result = new LinearExpression();
+        if (expr == null) {
+            return null;
+        } else if (expr instanceof ConstantExpression c) {
+            return result.add(Integer.valueOf(c.getValue()));
+        } else if (expr instanceof SCVariableExpression v) {
+            Expr<T> var = getVariableFromExpression(v, sc_inst);
+            return result.add(var, 1);
+        } else if (expr instanceof BracketExpression b) {
+            return getLinearExpression(b.getInBrackets(), sc_inst);
+        } else if (expr instanceof BinaryExpression b) {
+            LinearExpression left = getLinearExpression(b.getLeft(), sc_inst);
+            if (left == null) return null;
+            LinearExpression right = getLinearExpression(b.getRight(), sc_inst);
+            if (right == null) return null;
+            switch (b.getOp()) {
+                case "+": return left.add(right);
+                case "-": return left.add(LinearExpression.minus(right));
+                case "*": {
+                    // at least one of the operands must be a constant to ensure that
+                    // the resulting expression is still a linear expression
+                    if (!left.isConstant() && !right.isConstant()) {
+                        return null;
+                    }
+                    if (left.isConstant()) {
+                        return right.mult(left.getConstant());
+                    } else {
+                        return left.mult(right.getConstant());
+                    }
+                }
+                default: return null;
+            }
+        } else {
+            return null;
+        }
+    }
+
+    public Expr<T> getConstantBoundInvariant(LinearExpression init_value, Compare cond, LinearExpression transfer_function, Expr<T> var) {
+        Interval loop_bounds = getLoopBounds(init_value, transfer_function, cond, var);
+
+        IntegerValue<T> lower = new IntegerValue<>(BigInt.apply(loop_bounds.getLowerValue()), OriGen.create());
+        IntegerValue<T> upper = new IntegerValue<>(BigInt.apply(loop_bounds.getUpperValue()), OriGen.create());
+        LessEq<T> lower_bound = new LessEq<>(lower, var, OriGen.create());
+        LessEq<T> upper_bound = new LessEq<>(var, upper, OriGen.create());
+        return new And<>(lower_bound, upper_bound, OriGen.create());
+    }
+
+    public Interval getLoopBounds(LinearExpression init, LinearExpression transfer_function, Compare cond, Expr<T> var) {
+        Interval bounds = new Interval(init.getConstant());
         Interval new_bounds = bounds;
         do {
-            Interval next = bounds.join(new_bounds.add(transfer_value));
+            Bound lower = transfer_function.evaluate(var, new_bounds.getLower()).getConstant();
+            Bound upper = transfer_function.evaluate(var, new_bounds.getUpper()).getConstant();
+            Interval result = new Interval(lower, upper);
+            Interval next = bounds.join(result);
             bounds = new_bounds;
             new_bounds = next;
-        } while (!bounds.equals(new_bounds) && isGuarded(bounds, cond, comp));
+        } while (!bounds.equals(new_bounds) && isGuarded(bounds, cond, var));
         return bounds;
     }
 
-    public static boolean isGuarded(Interval interval, Integer guard, String comp) {
-        Bound guard_bound = new Bound(guard);
-        switch (comp) {
-            case "<" : {
-                return interval.getLower().compareTo(guard_bound) < 0 && interval.getUpper().compareTo(guard_bound) < 0;
-            }
-            case "<=" : {
-                return interval.getLower().compareTo(guard_bound) <= 0 && interval.getUpper().compareTo(guard_bound) <= 0;
-            }
-            case ">" : {
-                return interval.getLower().compareTo(guard_bound) > 0 && interval.getUpper().compareTo(guard_bound) > 0;
-            }
-            case ">=" : {
-                return interval.getLower().compareTo(guard_bound) >= 0 && interval.getUpper().compareTo(guard_bound) >= 0;
-            }
-            default: {
-                return false;
-            }
-        }
-    }
-
-    public static Integer getTransferFunctionValue(BinaryExpression expr) {
-        Expression right = expr.getRight();
-        if (!(right instanceof BinaryExpression)) {
-            return null;
-        }
-        BinaryExpression binary = (BinaryExpression) right;
-        Integer value = getBinaryConstantRight(binary);
-        if (value == null) {
-            return null;
-        }
-        String op = binary.getOp();
-        if (op.equals("-")) {
-            return -value;
-        }
-        if (op.equals("+")) {
-            return value;
-        }
-        return null;
-    }
-
-    public static Integer getBinaryConstantRight(BinaryExpression expr) {
-        Expression right = expr.getRight();
-        if (!(right instanceof ConstantExpression)) {
-            return null;
-        }
-        ConstantExpression value_expression = (ConstantExpression) right;
-        String value_string = value_expression.getValue();
-        try {
-            Integer value = new Integer(value_string);
-            return value;
-        } catch (NumberFormatException e) {
-            return null;
-        }
-    }
-
-    public static String getBinaryVariableLeft(BinaryExpression expr) {
-        Expression left = expr.getLeft();
-        if (!(left instanceof SCVariableExpression)) {
-            return null;
-        }
-        SCVariableExpression variable_expression = (SCVariableExpression) left;
-        return variable_expression.getVar().getName();
+    public boolean isGuarded(Interval interval, Compare cond, Expr<T> var) {
+        Compare cond_lower = new Compare(cond.getOp(), cond.getLeft().evaluate(var, interval.getLower()), cond.getRight());
+        Compare cond_upper = new Compare(cond.getOp(), cond.getLeft().evaluate(var, interval.getUpper()), cond.getRight());
+        return cond_lower.evaluate() && cond_upper.evaluate();
     }
 
     /**
