@@ -190,6 +190,9 @@ public class LinearExpression {
      * @return the resuling linear expression
      */
     public static LinearExpression mult(LinearExpression expr, Bound value) {
+        if (value.equals(new Bound(0))) {
+            return new LinearExpression();
+        }
         Map<Object, Bound> terms = new HashMap<>(expr.getTerms());
         Bound constant = new Bound(expr.getConstant());
         for (Object var : terms.keySet()) {
