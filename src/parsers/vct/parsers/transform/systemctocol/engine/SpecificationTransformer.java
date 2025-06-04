@@ -158,7 +158,9 @@ public class SpecificationTransformer<T> {
             init_value == null ||
             transfer_var == null ||
             transfer_function == null ||
-            cond == null) {
+            cond == null || 
+            cond.getOp() == ComparisonType.EQ || 
+            cond.getOp() == ComparisonType.NEQ) {
 
             return this.create_loop_invariant(path_cond);
         }
@@ -178,6 +180,12 @@ public class SpecificationTransformer<T> {
         // if constant loop, get bounds
         if (init_value.isConstant() && cond.getRight().isConstant() && transfer_function.isUnivariate()) {
             Expr<T> bound_invariant = getConstantBoundInvariant(init_value, cond, transfer_function, var);
+            return new LoopInvariant<>(col_system.fold_star(java.util.List.of(this.create_basic_invariant(path_cond), bound_invariant)), Option.empty(), new GeneratedBlame<>(), OriGen.create());
+        }
+
+        // if we have a variable guard, but constant initial value
+        if (init_value.isConstant()) {
+            Expr<T> bound_invariant = getVariableGuardInvariant(init_value, cond, transfer_function, var);
             return new LoopInvariant<>(col_system.fold_star(java.util.List.of(this.create_basic_invariant(path_cond), bound_invariant)), Option.empty(), new GeneratedBlame<>(), OriGen.create());
         }
 
@@ -254,14 +262,124 @@ public class SpecificationTransformer<T> {
         }
     }
 
+    public Expr<T> translateLinearExpression(LinearExpression expr) {
+        // check if this is a constant expression
+        int constant = expr.getConstant().getValue();
+        if (expr.isConstant()) {
+            return new IntegerValue<>(BigInt.apply(constant), OriGen.create()); 
+        }
+
+        // it is not constant, so build it
+        Expr<T> result = null;
+        for (Object obj : expr.getTerms().keySet()) {
+            Expr<T> var = (Expr<T>) obj;
+            int coefficient = expr.getTerms().get(obj).getValue();
+            // build the operand based on its coefficient
+            Expr<T> operand = null;
+            // if the coefficient is just one, don't write it
+            if (coefficient == 1 || coefficient == -1) {
+                operand = var;
+            } else if (coefficient > 0) {
+                Expr<T> value = new IntegerValue<>(BigInt.apply(coefficient), OriGen.create());
+                operand = new Mult<>(value, var, OriGen.create());
+            } else {
+                Expr<T> value = new IntegerValue<>(BigInt.apply(-coefficient), OriGen.create());
+                operand = new Mult<>(value, var, OriGen.create());
+            }
+            // is this the first operand?
+            if (result == null) {
+                // add the sign properly
+                if (coefficient < 0) {
+                    result = new UMinus<>(operand, OriGen.create());
+                } else {
+                    result = operand;
+                }
+            } else {
+                // this is not the first operand, add the sign properly
+                if (coefficient < 0) {
+                    result = new Minus<>(result, operand, OriGen.create());
+                } else {
+                    result = new Plus<>(result, operand, OriGen.create());
+                }
+            }
+        }
+        // finally we add the constant
+        Expr<T> value;
+        if (constant > 0) {
+            value = new IntegerValue<>(BigInt.apply(constant), OriGen.create());
+            result = new Plus<>(result, value, OriGen.create());
+        } else if (constant < 0) {
+            value = new IntegerValue<>(BigInt.apply(-constant), OriGen.create()); 
+            result = new Minus<>(result, value, OriGen.create());
+        }
+
+        return result;
+    }
+
+    public Expr<T> translateCompare(Compare comp, boolean reduce) {
+        Expr<T> left;
+        Expr<T> right;
+        if (reduce) {
+            left = translateLinearExpression(comp.reduce().getLeft());
+            right = translateLinearExpression(comp.reduce().getRight());
+        } else {
+            left = translateLinearExpression(comp.getLeft());
+            right = translateLinearExpression(comp.getRight());
+        }
+        switch (comp.getOp()) {
+            case EQ: return new Eq<>(left, right, OriGen.create());
+            case NEQ: return new Neq<>(left, right, OriGen.create());
+            case LESSER: return new Less<>(left, right, OriGen.create());
+            case LESSER_EQ: return new LessEq<>(left, right, OriGen.create());
+            case GREATER: return new Greater<>(left, right, OriGen.create());
+            case GREATER_EQ: return new GreaterEq<>(left, right, OriGen.create());
+            default: return null;
+        }
+    }
+
+    public Expr<T> translateCompare(Compare comp) {
+        return translateCompare(comp, false);
+    }
+
+    public Expr<T> getVariableGuardInvariant(LinearExpression init_value, Compare cond, LinearExpression transfer_function, Expr<T> var) {
+        LinearExpression last_step = cond.getRight();
+        switch (cond.getOp()) {
+            case EQ, NEQ: return null;
+            case LESSER: last_step = last_step.add(-1); break;
+            case GREATER: last_step = last_step.add(1); break;
+            default: break;
+        }
+        LinearExpression symbolic_bound = transfer_function.replace(var, last_step);
+        Compare lower;
+        Compare upper;
+        switch (cond.getOp()) {
+            case EQ, NEQ: return null;
+            case LESSER, LESSER_EQ: {
+                lower = new Compare(ComparisonType.LESSER_EQ, init_value, new LinearExpression().add(var, 1));
+                upper = new Compare(ComparisonType.LESSER_EQ, new LinearExpression().add(var, 1), symbolic_bound);
+                break;
+            }
+            case GREATER, GREATER_EQ: {
+                lower = new Compare(ComparisonType.LESSER_EQ, symbolic_bound, new LinearExpression().add(var, 1));
+                upper = new Compare(ComparisonType.LESSER_EQ, new LinearExpression().add(var, 1), init_value);
+                break;
+            }
+            default: return null;
+        }
+        return new And<>(translateCompare(lower), translateCompare(upper), OriGen.create());
+    }
+
     public Expr<T> getConstantBoundInvariant(LinearExpression init_value, Compare cond, LinearExpression transfer_function, Expr<T> var) {
         Interval loop_bounds = getLoopBounds(init_value, transfer_function, cond, var);
 
-        IntegerValue<T> lower = new IntegerValue<>(BigInt.apply(loop_bounds.getLowerValue()), OriGen.create());
-        IntegerValue<T> upper = new IntegerValue<>(BigInt.apply(loop_bounds.getUpperValue()), OriGen.create());
-        LessEq<T> lower_bound = new LessEq<>(lower, var, OriGen.create());
-        LessEq<T> upper_bound = new LessEq<>(var, upper, OriGen.create());
-        return new And<>(lower_bound, upper_bound, OriGen.create());
+        Compare lower = new Compare(ComparisonType.LESSER_EQ,
+            new LinearExpression().add(loop_bounds.getLower()),
+            new LinearExpression().add(var, 1));
+        Compare upper = new Compare(ComparisonType.LESSER_EQ,
+            new LinearExpression().add(var, 1),
+            new LinearExpression().add(loop_bounds.getUpper()));
+
+        return new And<>(translateCompare(lower), translateCompare(upper), OriGen.create());
     }
 
     public Interval getLoopBounds(LinearExpression init, LinearExpression transfer_function, Compare cond, Expr<T> var) {
