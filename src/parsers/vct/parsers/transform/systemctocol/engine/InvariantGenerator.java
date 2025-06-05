@@ -71,7 +71,13 @@ public class InvariantGenerator<T> {
             
         // }
 
-        return getVariableGuardInvariant(init_value, cond, transfer_function, var);
+        Expr<T> result = getVariableGuardInvariant(init_value, cond, transfer_function, var);
+        Expr<T> guard_relation = getGuardTransferRelationInvariant(cond, transfer_function, var);
+        if (guard_relation != null) {
+            result = new And<>(result, guard_relation, Origen.create());
+        }
+
+        return result;
 
         // return null;
     }
@@ -225,13 +231,43 @@ public class InvariantGenerator<T> {
         return translateCompare(comp, false);
     }
 
-    public Expr<T> getVariableGuardInvariant(LinearExpression init_value, Compare cond, LinearExpression transfer_function, Expr<T> var) {
+    public Expr<T> getGuardTransferRelationInvariant(Compare cond, LinearExpression transfer_function, Expr<T> var) {
+        ComparisonType op;
+        switch (cond.getOp()) {
+            case LESSER, LESSER_EQ: op = ComparisonType.LESSER_EQ; break;
+            case GREATER, GREATER_EQ: op = ComparisonType.GREATER_EQ; break;
+            default: return null;
+        }
+        LinearExpression last_step = getLastStep(cond);
+        if (last_step == null) {
+            return null;
+        }
+        LinearExpression symbolic_bound = transfer_function.replace(var, last_step);
+        Compare relation = new Compare(op, cond.getRight(), symbolic_bound);
+        relation = relation.reduce();
+        // this just means that the relation has simplified to true,
+        // so we discard it
+        if (relation.getLeft().isConstant()) {
+            return null;
+        }
+        return translateCompare(relation);
+    }
+
+    public LinearExpression getLastStep(Compare cond) {
         LinearExpression last_step = cond.getRight();
         switch (cond.getOp()) {
             case EQ, NEQ: return null;
             case LESSER: last_step = last_step.add(-1); break;
             case GREATER: last_step = last_step.add(1); break;
-            default: break;
+            default: return null;
+        }
+        return last_step;
+    }
+
+    public Expr<T> getVariableGuardInvariant(LinearExpression init_value, Compare cond, LinearExpression transfer_function, Expr<T> var) {
+        LinearExpression last_step = getLastStep(cond);
+        if (last_step == null) {
+            return null;
         }
         LinearExpression symbolic_bound = transfer_function.replace(var, last_step);
         Compare lower;
