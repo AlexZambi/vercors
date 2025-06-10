@@ -11,6 +11,7 @@ import scala.math.BigInt;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 import de.tub.pes.syscir.sc_model.SCVariable;
 import de.tub.pes.syscir.sc_model.expressions.*;
@@ -27,26 +28,6 @@ public class InvariantGenerator<T> {
     }
 
     public Expr<T> generateInvariant(LinearExpression init_value, Compare cond, LinearExpression transfer_function, Expr<T> var) {
-        
-        SymbolicState state = new SymbolicState();
-        state.add("n", new SymbolicInterval(5));
-        state.add("i", new SymbolicInterval(0));
-        state.add("j", new SymbolicInterval(1));
-        Assignment assign = new Assignment("i", new LinearExpression().add("i", 1).add(1));
-        List<Assignment> body = new ArrayList<>();
-        body.add(assign);
-        assign = new Assignment("j", new LinearExpression().add("i", 1).add(-1));
-        body.add(assign);
-        System.out.println("before: " + state.toString());
-        for (int i = 0; i < 5; i++) {
-            state = executeAndJoin(body, state);
-            System.out.println("at iteration " + String.valueOf(i) + ": " + state.toString());
-        }
-        System.out.println("finally: " + state.toString());
-
-        System.out.println();
-        System.out.println();
-        System.out.println();
 
         // if constant loop, get bounds
         if (init_value.isConstant() && cond.getRight().isConstant() && transfer_function.isUnivariate()) {
@@ -67,6 +48,22 @@ public class InvariantGenerator<T> {
         return result;
 
         // return null;
+    }
+
+    public Expr<T> generateInvariant(SymbolicState initial_state, List<Assignment> body, Compare cond) {
+        if (!initial_state.couldEvaluate(cond)) {
+            return null;
+        }
+        SymbolicState final_state = symbolicExecute(initial_state, body, cond);
+        List<Compare> bounds = stateToCompare(final_state);
+        if (bounds.isEmpty()) {
+            return null;
+        }
+        Expr<T> result = translateCompare(bounds.get(0));
+        for (int i = 1; i < bounds.size(); i++) {
+            result = new And<>(result, translateCompare(bounds.get(i)), OriGen.create());
+        }
+        return result;
     }
 
     public SymbolicState executeAndJoin(List<Assignment> body, SymbolicState initial_state) {
@@ -90,6 +87,39 @@ public class InvariantGenerator<T> {
             current_state = current_state.reduce();
         }
         return current_state;
+    }
+
+    public SymbolicState parentToState(Expression expr, SCClassInstance sc_inst) {
+        ExpressionBlock parent = (ExpressionBlock) expr.getParent();
+        java.util.List<Expression> parent_list = parent.getBlock();
+        java.util.List<Expression> context = parent_list.subList(0, parent_list.indexOf(expr));
+        java.util.List<Assignment> parsed = parseBody(context, sc_inst);
+        SymbolicState state = bodyToState(parsed).reduce();
+        return state;
+    }
+
+    public List<Compare> stateToCompare(SymbolicState state) {
+        List<Compare> result = new ArrayList<>();
+        Map<Object, SymbolicInterval> symbols = state.getSymbols();
+        for (Object var : symbols.keySet()) {
+            SymbolicInterval interval = symbols.get(var);
+            LinearExpression lower = interval.getLower();
+            LinearExpression upper = interval.getUpper();
+            LinearExpression var_expr = new LinearExpression().add(var, 1);
+            Compare comp = new Compare(ComparisonType.LESSER_EQ, lower, var_expr);
+            result.add(comp);
+            comp = new Compare(ComparisonType.LESSER_EQ, var_expr, upper);
+            result.add(comp);
+        }
+        return result;
+    }
+
+    public SymbolicState bodyToState(List<Assignment> body) {
+        SymbolicState state = new SymbolicState();
+        for (Assignment assign: body) {
+            state.add(assign.var, new SymbolicInterval(assign.expr));
+        }
+        return state;
     }
 
     public List<Assignment> parseBody(List<Expression> expressions, SCClassInstance sc_inst) {
@@ -346,6 +376,16 @@ public class InvariantGenerator<T> {
             new LinearExpression().add(loop_bounds.getUpper()));
 
         return new And<>(translateCompare(lower), translateCompare(upper), OriGen.create());
+    }
+
+    public SymbolicState symbolicExecute(SymbolicState initial_state, List<Assignment> body, Compare cond) {
+        SymbolicState current_state;
+        SymbolicState next_state = new SymbolicState(initial_state);
+        do {
+            current_state = next_state;
+            next_state = executeAndJoin(body, current_state);
+        } while (!current_state.equals(next_state) && current_state.satifies(cond));
+        return current_state;
     }
 
     public Interval getLoopBounds(LinearExpression init, LinearExpression transfer_function, Compare cond, Expr<T> var) {

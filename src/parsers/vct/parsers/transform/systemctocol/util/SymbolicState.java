@@ -151,6 +151,14 @@ public class SymbolicState {
         return evaluate(interval, this);
     }
 
+    public static SymbolicInterval evaluate(LinearExpression expr, SymbolicState state) {
+        return evaluate(new SymbolicInterval(expr), state);
+    }
+
+    public SymbolicInterval evaluate(LinearExpression expr) {
+        return evaluate(expr, this);
+    }
+
     public static SymbolicState reduce(SymbolicState state) {
         SymbolicState current_state = new SymbolicState(state);
         Set<Object> constants = getConstants(current_state);
@@ -176,6 +184,40 @@ public class SymbolicState {
         return result;
     }
 
+    public static boolean couldEvaluate(SymbolicState state, Compare cond) {
+        Set<Object> variables = new TreeSet<>(new StringComparator());
+        // add all variables of of the left side
+        variables.addAll(cond.getLeft().getTerms().keySet());
+        // then of the right side
+        variables.addAll(cond.getRight().getTerms().keySet());
+        // do we have all these variables in our state?
+        return state.symbols.keySet().containsAll(variables);
+    }
+
+    public boolean couldEvaluate(Compare cond) {
+        return couldEvaluate(this, cond);
+    }
+
+    public static boolean satifies(SymbolicState state, Compare cond) {
+        SymbolicInterval left = state.evaluate(cond.getLeft());
+        SymbolicInterval right = state.evaluate(cond.getRight());
+        Compare comp;
+        ComparisonType op = cond.getOp();
+        switch (op) {
+            case LESSER, LESSER_EQ: comp = new Compare(op, left.getUpper(), right.getLower()); break;
+            case GREATER, GREATER_EQ: comp = new Compare(op, left.getLower(), right.getUpper()); break;
+            default: return false;
+        }
+        if (!comp.canEvaluate()) {
+            return false;
+        }
+        return comp.evaluate();
+    }
+
+    public boolean satifies(Compare cond) {
+        return satifies(this, cond);
+    }
+
     public SymbolicState reduce() {
         return reduce(this);
     }
@@ -183,6 +225,8 @@ public class SymbolicState {
     public boolean hasSymbol(Object var) {
         return this.symbols.containsKey(var);
     }
+
+    public Map<Object, SymbolicInterval> getSymbols() {return this.symbols;}
 
     @Override
     public String toString() {

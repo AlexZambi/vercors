@@ -12,4 +12,9 @@ public class Assignment {
     public boolean isRecurrent() {
         return expr.hasVariable(var);
     }
+
+    @Override
+    public String toString() {
+        return var.toString() + " = " + expr.toString();
+    }
 }

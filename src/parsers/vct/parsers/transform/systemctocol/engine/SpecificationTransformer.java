@@ -105,7 +105,27 @@ public class SpecificationTransformer<T> {
         }
         Expr<T> var = (Expr<T>) init_variable;
 
+        SymbolicState state = invariant_generator.parentToState(expr, sc_inst);
+        // also add the counter variable
+        state.add(init_variable, new SymbolicInterval(init_value));
+        state = state.reduce();
+
+        System.out.println(state);
+        System.out.println();
+        System.out.println();
+        System.out.println();
+
+        java.util.List<Assignment> parsed_body = invariant_generator.parseBody(body, sc_inst);
+        // also add the loop iterator as a final assignment in the body
+        parsed_body.add(new Assignment(var, transfer_function));
+
         Expr<T> bound_invariant = invariant_generator.generateInvariant(init_value, cond, transfer_function, var);
+        Expr<T> symbolic_invariant = invariant_generator.generateInvariant(state, parsed_body, cond);
+
+        if (symbolic_invariant != null) {
+            bound_invariant = symbolic_invariant;
+        }
+
         if (bound_invariant != null) {
             return new LoopInvariant<>(col_system.fold_star(java.util.List.of(this.create_basic_invariant(path_cond), bound_invariant)), Option.empty(), new GeneratedBlame<>(), OriGen.create());
         }
