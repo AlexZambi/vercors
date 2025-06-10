@@ -1,6 +1,5 @@
 package vct.parsers.transform.systemctocol.util;
 
-import java.util.Comparator;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -15,13 +14,6 @@ public class LinearExpression {
      */
     private Map<Object, Bound> terms;
     private Bound constant;
-
-    public class StringComparator implements Comparator<Object> {
-        @Override
-        public int compare(Object a, Object b) {
-            return a.toString().compareTo(b.toString());
-        }
-    }
 
     /**
      * Construct a linear expression that is the constant 0.
@@ -62,7 +54,7 @@ public class LinearExpression {
      * @return a new linear expression representing the result
      */
     public static LinearExpression add(LinearExpression expr, Object var, Bound coeff) {
-        Map<Object, Bound> terms = new TreeMap<>(expr.new StringComparator());
+        Map<Object, Bound> terms = new TreeMap<>(new StringComparator());
         terms.putAll(expr.getTerms());
         Bound constant = expr.getConstant();
         Bound prevCoeff = null;
@@ -131,7 +123,7 @@ public class LinearExpression {
      * @return a new linear expression representing the result
      */
     public static LinearExpression add(LinearExpression expr, Bound constant) {
-        Map<Object, Bound> terms = new TreeMap<>(expr.new StringComparator());
+        Map<Object, Bound> terms = new TreeMap<>(new StringComparator());
         terms.putAll(expr.getTerms());
         Bound prevConstant = expr.getConstant();
         return new LinearExpression(terms, prevConstant.add(constant));
@@ -209,7 +201,7 @@ public class LinearExpression {
         if (value.equals(new Bound(0))) {
             return new LinearExpression();
         }
-        Map<Object, Bound> terms = new TreeMap<>(expr.new StringComparator());
+        Map<Object, Bound> terms = new TreeMap<>(new StringComparator());
         terms.putAll(expr.getTerms());
         Bound constant = new Bound(expr.getConstant());
         for (Object var : terms.keySet()) {
@@ -257,7 +249,7 @@ public class LinearExpression {
      * @return the resulting linear expression
      */
     public static LinearExpression minus(LinearExpression expr) {
-        Map<Object, Bound> terms = new TreeMap<>(expr.new StringComparator());
+        Map<Object, Bound> terms = new TreeMap<>(new StringComparator());
         terms.putAll(expr.getTerms());
         Bound constant = new Bound(expr.getConstant());
         for (Object var : terms.keySet()) {
@@ -280,7 +272,7 @@ public class LinearExpression {
         if (!expr.getTerms().containsKey(oldVar)) {
             return new LinearExpression(expr);
         }
-        Map<Object, Bound> terms = new TreeMap<>(expr.new StringComparator());
+        Map<Object, Bound> terms = new TreeMap<>(new StringComparator());
         terms.putAll(expr.getTerms());
         Bound constant = new Bound(expr.getConstant());
         if (!expr.getTerms().containsKey(newVar)) {
@@ -350,7 +342,7 @@ public class LinearExpression {
             return new LinearExpression(expr);
         }
         LinearExpression result = new LinearExpression();
-        Map<Object, Bound> terms = new TreeMap<>(expr.new StringComparator());
+        Map<Object, Bound> terms = new TreeMap<>(new StringComparator());
         terms.putAll(expr.getTerms());
         Bound constant = expr.getConstant();
 

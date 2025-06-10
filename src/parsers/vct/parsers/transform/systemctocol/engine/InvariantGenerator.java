@@ -7,6 +7,11 @@ import vct.col.ref.DirectRef;
 import vct.col.ref.LazyRef;
 import vct.col.ref.Ref;
 import scala.math.BigInt;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
 import de.tub.pes.syscir.sc_model.SCVariable;
 import de.tub.pes.syscir.sc_model.expressions.*;
 import de.tub.pes.syscir.sc_model.variables.SCClassInstance;
@@ -22,40 +27,22 @@ public class InvariantGenerator<T> {
     }
 
     public Expr<T> generateInvariant(LinearExpression init_value, Compare cond, LinearExpression transfer_function, Expr<T> var) {
-        MinMaxExpression m = new MinMaxExpression(MinMaxType.MIN, new LinearExpression().add("N", 1).add(2), new LinearExpression().add("N", 2).add(1));
-        System.out.println("min-max:");
-        System.out.println(m);
-        System.out.println("is solvable: " + m.isSolvable());
-        System.out.println("eval m for N = 1");
-        m = m.evaluate("N", new Bound(1));
-        System.out.println(m);
-        System.out.println("is solvable: " + m.isSolvable());
-        System.out.println(m.solve());
-        System.out.println();
-        System.out.println();
-
-        LinearExpression l1 = new LinearExpression().add("N", 2).add(1);
-        LinearExpression l2 = new LinearExpression().add("N", 2).add(3);
-        MinMaxExpression m1 = new MinMaxExpression(MinMaxType.MAX, l1 , l2);
-        System.out.println(m1);
-        System.out.println("is solvable: " + m1.isSolvable());
-        System.out.println(m1.solve());
-        System.out.println();
-        System.out.println();
-
-        LinearExpression l = new LinearExpression().add(m1, 2).add("N", 2).add(1);
-        System.out.println("mixed expression:");
-        System.out.println(l);
-        System.out.println("evaluate for N = 1");
-        System.out.println(l.evaluate("N", 1));
-        System.out.println();
-        System.out.println();
-
-        LinearExpression l3 = new LinearExpression().add("N", 1).add("k", 2).add(1);
-        MinMaxExpression m2 = new MinMaxExpression(MinMaxType.MIN, l3, l);
-        System.out.println(m2);
-        System.out.println("evaluate for N = 1");
-        System.out.println(m2.evaluate("N", new Bound(1)));
+        
+        SymbolicState state = new SymbolicState();
+        state.add("n", new SymbolicInterval(5));
+        state.add("i", new SymbolicInterval(0));
+        state.add("j", new SymbolicInterval(1));
+        Assignment assign = new Assignment("i", new LinearExpression().add("i", 1).add(1));
+        List<Assignment> body = new ArrayList<>();
+        body.add(assign);
+        assign = new Assignment("j", new LinearExpression().add("i", 1).add(-1));
+        body.add(assign);
+        System.out.println("before: " + state.toString());
+        for (int i = 0; i < 5; i++) {
+            state = executeAndJoin(body, state);
+            System.out.println("at iteration " + String.valueOf(i) + ": " + state.toString());
+        }
+        System.out.println("finally: " + state.toString());
 
         System.out.println();
         System.out.println();
@@ -74,12 +61,71 @@ public class InvariantGenerator<T> {
         Expr<T> result = getVariableGuardInvariant(init_value, cond, transfer_function, var);
         Expr<T> guard_relation = getGuardTransferRelationInvariant(cond, transfer_function, var);
         if (guard_relation != null) {
-            result = new And<>(result, guard_relation, Origen.create());
+            result = new And<>(result, guard_relation, OriGen.create());
         }
 
         return result;
 
         // return null;
+    }
+
+    public SymbolicState executeAndJoin(List<Assignment> body, SymbolicState initial_state) {
+        return executeBody(body, initial_state).join(initial_state).reduce();
+    }
+
+    public SymbolicState executeBody(List<Assignment> body, SymbolicState initial_state) {
+        SymbolicState current_state = new SymbolicState(initial_state);
+        for (Assignment assignment : body) {
+            Object var = assignment.var;
+            LinearExpression transform = assignment.expr;
+            // if we don't have this symbol in the state, then it doesn't change the state
+            if (!current_state.hasSymbol(var)) {
+                continue;
+            }
+            if (!assignment.isRecurrent()) {
+                current_state.add(var, new SymbolicInterval(transform));
+            } else {
+                current_state.update(var, transform);
+            }
+            current_state = current_state.reduce();
+        }
+        return current_state;
+    }
+
+    public List<Assignment> parseBody(List<Expression> expressions, SCClassInstance sc_inst) {
+        List<Assignment> result = new ArrayList<>();
+        for (Expression expression : expressions) {
+            if (!(expression instanceof BinaryExpression)) {
+                continue;
+            }
+            BinaryExpression expr = (BinaryExpression) expression;
+            if (!Arrays.asList("=", "+=", "-=", "*=").contains(expr.getOp())) {
+                // unsupported expression, best to just return null
+                return null;
+            }
+            if (!(expr.getLeft() instanceof SCVariableExpression)) {
+                // not sure if this can even happen, but to be sure
+                return null;
+            }
+            Expr<T> var = getVariableFromExpression((SCVariableExpression) expr.getLeft(), sc_inst);
+            LinearExpression assign = getLinearExpression(expr.getRight(), sc_inst);
+            if (assign == null) {
+                return null;
+            }
+            if (expr.getOp().equals("+=")) {
+                assign = assign.add(var, 1);
+            } else if (expr.getOp().equals("-=")) {
+                assign = assign.add(var, -1);
+            } else if (expr.getOp().equals("*=")) {
+                // we don't support multipliying symbols together
+                if (!assign.isConstant()) {
+                    return null;
+                }
+                assign = new LinearExpression().add(var, assign.getConstant());
+            }
+            result.add(new Assignment(var, assign));
+        }
+        return result;
     }
 
     public Expr<T> getVariableFromExpression(SCVariableExpression expr, SCClassInstance sc_inst) {
